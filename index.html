@@ -436,9 +436,25 @@ https://github.com/nodeca/pako/blob/main/LICENSE
     return parseFloat(t);
   }
 
+  const COMMERCIOS =  {
+    '4235584': "Tienda La Tuya",
+    '4235585': "Tienda Merkhogar",
+    '4235586': "Tienda Bx3",
+    '4235587': "Mercado 5ta y C",
+    '6333080': "Tienda Componente",
+    '6333081': "El Paraíso",
+    '6331632': "Multi Axess"
+  }
+  
   function fields(obs) {
     var o = obs.replace(/\s+/g, " ").trim();
-    var com = o.match(/COMERCIO:\s*(.*?)\s*\./);
+    var com = o.match(/COMERCIO:\s*(.*?)\s*\.DATOS BENEFI/);
+
+    com || Object.keys(COMMERCIOS).forEach(function (k) {
+      var re = new RegExp(k, "i");
+      if (re.test(o)) com = [null, COMMERCIOS[k]];
+    });
+    
     var det = o.match(/\.DATOS BENEFI DET PAGO\s*(.*?)\s*\.DET PAGO/);
     var tar = o.match(/Tarjeta\s*:\s*([0-9X]+)/);
     var desc;
