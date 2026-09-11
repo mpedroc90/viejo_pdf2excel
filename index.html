@@ -438,7 +438,7 @@ https://github.com/nodeca/pako/blob/main/LICENSE
 
   function fields(obs) {
     var o = obs.replace(/\s+/g, " ").trim();
-    var com = o.match(/COMERCIO:\s*(.*?)\s*\.DATOS BENEFI/);
+    var com = o.match(/COMERCIO:\s*(.*?)\s*\./);
     var det = o.match(/\.DATOS BENEFI DET PAGO\s*(.*?)\s*\.DET PAGO/);
     var tar = o.match(/Tarjeta\s*:\s*([0-9X]+)/);
     var desc;
