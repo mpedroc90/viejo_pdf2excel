@@ -450,7 +450,7 @@ https://github.com/nodeca/pako/blob/main/LICENSE
     var o = obs.replace(/\s+/g, " ").trim();
     //var com = o.match(/COMERCIO:\s*(.*?)\s*\.DATOS BENEFI/);
 
-    com || Object.keys(COMMERCIOS).forEach(function (k) {
+    Object.keys(COMMERCIOS).forEach(function (k) {
       var re = new RegExp(k, "i");
       if (re.test(o)) com = [null, k + " - " + COMMERCIOS[k]];
     });
