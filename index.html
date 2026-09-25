@@ -446,6 +446,32 @@ https://github.com/nodeca/pako/blob/main/LICENSE
     '6331632': "Multi Axess"
   }
   
+  /* Conceptos: el Resumen abre una fila por cada par comercio × concepto.
+     El orden importa, se devuelve la primera coincidencia. */
+  var CONCEPTOS = [
+    { re: /TRANSFERENCIA\s*AUTOMATICA|TRANSF\.?\s*AUTOMATICA/i, cat: "Transferencia automática" },
+    { re: /COMISION/i, cat: "Comisión" },
+    { re: /BONIFICACION/i, cat: "Bonificación" },
+    { re: /NOMINA/i, cat: "Nómina" },
+    { re: /PAGO\s+DE\s+SERVICIO|DET\s*PAGO/i, cat: "Pago recibido" }
+  ];
+  /* Orden de presentación dentro de cada comercio (distinto del orden de coincidencia). */
+  var CONCEPTO_ORDEN = ["Pago recibido", "Comisión", "Transferencia automática", "Bonificación", "Nómina", "Otro"];
+
+  /* Quita tildes: el PDF escribe "COMISION"/"BONIFICACION" sin acentos,
+     pero la descripción ya normalizada puede llevarlos. */
+  function sinTildes(t) {
+    return (t || "").normalize ? (t || "").normalize("NFD").replace(/[\u0300-\u036f]/g, "") : (t || "");
+  }
+
+  function concepto(o) {
+    var t = sinTildes(o);
+    for (var i = 0; i < CONCEPTOS.length; i++) {
+      if (CONCEPTOS[i].re.test(t)) return CONCEPTOS[i].cat;
+    }
+    return "Otro";
+  }
+
   function fields(obs) {
     var o = obs.replace(/\s+/g, " ").trim();
     var com = o.match(/COMERCIO:\s*(.*?)\s*\.DATOS BENEFI/);
@@ -461,9 +487,12 @@ https://github.com/nodeca/pako/blob/main/LICENSE
     if (det) desc = det[1].split(/\s*Tarjeta\s*:/)[0].trim();
     else if (/^COMISION/i.test(o)) desc = "Comision por acreditacion de nomina";
     else if (/^NOMINA/i.test(o)) desc = "Nomina";
+    else if (/^BONIFICACION/i.test(o)) desc = "Bonificación";
+    else if (/TRANSFERENCIA\s*AUTOMATICA|TRANSF\.?\s*AUTOMATICA/i.test(o)) desc = "Transferencia automática";
     else desc = o.slice(0, 140);
     if (tar) desc += " | Tarjeta " + tar[1];
-    return { desc: desc, comercio: com ? com[1] : "", obs: o };
+    var comercio = com ? com[1] : "";
+    return { desc: desc, comercio: comercio, concepto: concepto(o), obs: o };
   }
 
   function parseDoc(pdf, onProgress) {
@@ -544,6 +573,7 @@ https://github.com/nodeca/pako/blob/main/LICENSE
           ref: t.ref.join("").replace(/\s/g, ""),
           desc: f.desc,
           comercio: f.comercio,
+          concepto: f.concepto,
           debito: t.oper === "DB" ? imp : null,
           credito: t.oper === "DB" ? null : imp,
           saldoBanco: num(t.saldo.join("")),
@@ -579,7 +609,7 @@ https://github.com/nodeca/pako/blob/main/LICENSE
   var MONEY = '#,##0.00;-#,##0.00;-';
   var HEADERS = ["Fecha", "Referencia", "Descripción", "Comercio / Beneficiario",
     "Débito (CUP)", "Crédito (CUP)", "Saldo calculado (CUP)", "Saldo según banco (CUP)",
-    "Diferencia", "Detalle completo"];
+    "Diferencia", "Detalle completo", "Concepto"];
 
   function buildWorkbook(data) {
     var wb = new ExcelJS.Workbook();
@@ -588,7 +618,8 @@ https://github.com/nodeca/pako/blob/main/LICENSE
 
     ws.columns = [
       { width: 12 }, { width: 16 }, { width: 46 }, { width: 24 }, { width: 15 },
-      { width: 15 }, { width: 19 }, { width: 21 }, { width: 12 }, { width: 60 }
+      { width: 15 }, { width: 19 }, { width: 21 }, { width: 12 }, { width: 60 },
+      { width: 26, hidden: true }
     ];
 
     var head = ws.getRow(1);
@@ -619,6 +650,7 @@ https://github.com/nodeca/pako/blob/main/LICENSE
       row.getCell(8).value = r.saldoBanco;
       row.getCell(9).value = { formula: "ROUND(G" + n + "-H" + n + ",2)", result: r.dif };
       row.getCell(10).value = r.obs;
+      row.getCell(11).value = r.concepto || concepto(r.obs || r.desc);
     });
 
     var last = 2 + data.rows.length, tot = last + 1;
@@ -653,7 +685,8 @@ https://github.com/nodeca/pako/blob/main/LICENSE
       "• El PDF trae una sola columna “Importe” con un indicador de operación (CR/DB); CR se colocó en Crédito y DB en Débito.",
       "• El “Saldo calculado” es una fórmula: saldo anterior − débito + crédito. El “Saldo según banco” es el que imprime el PDF.",
       "• La columna Diferencia debe ser 0 en todas las filas (comprobación de la extracción).",
-      "• El saldo inicial (en azul) es el único importe fijo; proviene de la primera línea del estado de cuenta."
+      "• El saldo inicial (en azul) es el único importe fijo; proviene de la primera línea del estado de cuenta.",
+      "• La columna K (oculta) guarda el Concepto de cada fila (Pago recibido, Comisión, Transferencia automática, Bonificación, Nómina). La hoja Resumen abre una fila por cada par comercio × concepto."
     ];
     notes.forEach(function (txt, i) {
       var cell = ws.getRow(tot + 2 + i).getCell(3);
@@ -661,11 +694,11 @@ https://github.com/nodeca/pako/blob/main/LICENSE
       cell.font = { name: "Arial", size: i === 0 ? 10 : 9, bold: i === 0, italic: i > 0 };
     });
 
-    /* --- resumen --- */
+    /* --- resumen: una fila por cada par comercio × concepto --- */
     var ws2 = wb.addWorksheet("Resumen", { views: [{ state: "frozen", ySplit: 1 }] });
-    ws2.columns = [{ width: 32 }, { width: 18 }, { width: 18 }, { width: 18 }];
+    ws2.columns = [{ width: 32 }, { width: 26 }, { width: 18 }, { width: 18 }, { width: 18 }];
     var h2 = ws2.getRow(1);
-    ["Comercio / Beneficiario", "Nº de operaciones", "Crédito (CUP)", "Débito (CUP)"].forEach(function (h, i) {
+    ["Comercio / Beneficiario", "Concepto", "Nº de operaciones", "Crédito (CUP)", "Débito (CUP)"].forEach(function (h, i) {
       var c = h2.getCell(i + 1);
       c.value = h;
       c.font = { name: "Arial", size: 10, bold: true, color: { argb: "FFFFFFFF" } };
@@ -673,35 +706,84 @@ https://github.com/nodeca/pako/blob/main/LICENSE
       c.alignment = { horizontal: "center", wrapText: true };
     });
 
-    var agg = {};
+    var agg = {}, order = [];
     data.rows.forEach(function (r) {
-      var k = r.comercio || "(sin comercio)";
-      agg[k] = agg[k] || { n: 0, cr: 0, db: 0 };
+      var com = r.comercio || "(sin comercio)";
+      var con = r.concepto || concepto(r.obs || r.desc);
+      var k = com + "\u0000" + con;
+      if (!agg[k]) { agg[k] = { com: com, con: con, n: 0, cr: 0, db: 0 }; order.push(k); }
       agg[k].n++; agg[k].cr += r.credito || 0; agg[k].db += r.debito || 0;
     });
-    var names = Object.keys(agg).sort();
-    names.forEach(function (name, i) {
-      var n = 2 + i, row = ws2.getRow(n);
-      var crit = name === "(sin comercio)" ? '""' : "$A" + n;
-      row.getCell(1).value = name;
-      row.getCell(2).value = { formula: 'COUNTIF(Movimientos!$D$3:$D$' + last + "," + crit + ")", result: agg[name].n };
-      row.getCell(3).value = { formula: "SUMIF(Movimientos!$D$3:$D$" + last + "," + crit + ",Movimientos!$F$3:$F$" + last + ")", result: Math.round(agg[name].cr * 100) / 100 };
-      row.getCell(4).value = { formula: "SUMIF(Movimientos!$D$3:$D$" + last + "," + crit + ",Movimientos!$E$3:$E$" + last + ")", result: Math.round(agg[name].db * 100) / 100 };
+
+    /* Comercios alfabéticos ("(sin comercio)" al final); dentro, conceptos en orden fijo. */
+    var keys = order.sort(function (ka, kb) {
+      var a2 = agg[ka], b2 = agg[kb];
+      if (a2.com !== b2.com) {
+        if (a2.com === "(sin comercio)") return 1;
+        if (b2.com === "(sin comercio)") return -1;
+        return a2.com.localeCompare(b2.com, "es");
+      }
+      return CONCEPTO_ORDEN.indexOf(a2.con) - CONCEPTO_ORDEN.indexOf(b2.con);
     });
-    var rt = 2 + names.length, tr = ws2.getRow(rt);
+
+    /* Filas de detalle + un subtotal por comercio cuando tiene más de un concepto. */
+    var D = "Movimientos!$D$3:$D$" + last, K = "Movimientos!$K$3:$K$" + last;
+    var CR = "Movimientos!$F$3:$F$" + last, DB = "Movimientos!$E$3:$E$" + last;
+    var n = 1, subtotalRows = [], blocks = [];
+
+    keys.forEach(function (k, i) {
+      var g = agg[k];
+      var prev = i ? agg[keys[i - 1]] : null;
+      if (prev && prev.com !== g.com) flushSubtotal(prev.com);
+      n++;
+      var row = ws2.getRow(n);
+      var critCom = g.com === "(sin comercio)" ? '""' : "$A" + n;
+      row.getCell(1).value = g.com;
+      row.getCell(2).value = g.con;
+      row.getCell(3).value = { formula: "COUNTIFS(" + D + "," + critCom + "," + K + ",$B" + n + ")", result: g.n };
+      row.getCell(4).value = { formula: "SUMIFS(" + CR + "," + D + "," + critCom + "," + K + ",$B" + n + ")", result: Math.round(g.cr * 100) / 100 };
+      row.getCell(5).value = { formula: "SUMIFS(" + DB + "," + D + "," + critCom + "," + K + ",$B" + n + ")", result: Math.round(g.db * 100) / 100 };
+      blocks.push(n);
+    });
+    if (keys.length) flushSubtotal(agg[keys[keys.length - 1]].com);
+
+    function flushSubtotal(com) {
+      if (blocks.length < 2) { blocks = []; return; }   /* un solo concepto: sin subtotal */
+      var first = blocks[0], lastB = blocks[blocks.length - 1];
+      n++;
+      var row = ws2.getRow(n);
+      row.getCell(2).value = "Subtotal " + com;
+      row.getCell(3).value = { formula: "SUM(C" + first + ":C" + lastB + ")" };
+      row.getCell(4).value = { formula: "SUM(D" + first + ":D" + lastB + ")" };
+      row.getCell(5).value = { formula: "SUM(E" + first + ":E" + lastB + ")" };
+      subtotalRows.push(n);
+      blocks = [];
+    }
+
+    /* El TOTAL suma sólo las filas de detalle, nunca los subtotales. */
+    var detailRows = [];
+    for (var d = 2; d <= n; d++) if (subtotalRows.indexOf(d) === -1) detailRows.push(d);
+    function sumDetail(col) {
+      return detailRows.map(function (r) { return col + r; }).join("+") || "0";
+    }
+    var rt = n + 1, tr = ws2.getRow(rt);
     tr.getCell(1).value = "TOTAL";
-    tr.getCell(2).value = { formula: "SUM(B2:B" + (rt - 1) + ")", result: data.rows.length };
-    tr.getCell(3).value = { formula: "SUM(C2:C" + (rt - 1) + ")", result: Math.round(data.totalCredito * 100) / 100 };
-    tr.getCell(4).value = { formula: "SUM(D2:D" + (rt - 1) + ")", result: Math.round(data.totalDebito * 100) / 100 };
+    tr.getCell(3).value = { formula: sumDetail("C"), result: data.rows.length };
+    tr.getCell(4).value = { formula: sumDetail("D"), result: Math.round(data.totalCredito * 100) / 100 };
+    tr.getCell(5).value = { formula: sumDetail("E"), result: Math.round(data.totalDebito * 100) / 100 };
+
     for (var n3 = 2; n3 <= rt; n3++) {
-      for (var c3 = 1; c3 <= 4; c3++) {
+      var isSub = subtotalRows.indexOf(n3) !== -1;
+      for (var c3 = 1; c3 <= 5; c3++) {
         var cc = ws2.getRow(n3).getCell(c3);
-        cc.font = { name: "Arial", size: 10, bold: n3 === rt };
-        if (c3 === 2) cc.numFmt = "#,##0";
-        if (c3 >= 3) cc.numFmt = MONEY;
+        cc.font = { name: "Arial", size: 10, bold: n3 === rt || isSub, italic: isSub };
+        if (c3 === 3) cc.numFmt = "#,##0";
+        if (c3 >= 4) cc.numFmt = MONEY;
         if (n3 === rt) cc.fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FFD9E2F3" } };
+        else if (isSub) cc.fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FFEDEDED" } };
       }
     }
+    ws2.autoFilter = { from: "A1", to: "E1" };
     return wb;
   }
 
@@ -769,13 +851,18 @@ https://github.com/nodeca/pako/blob/main/LICENSE
       ["03/07/2026", "BR0000EJEM02", "PAGO DE SERVICIO RECIBIDO por BancaMovil | Tarjeta 9200XXXXXX0002", "Comercio de ejemplo B", null, 3480.50],
       ["03/07/2026", "BR0000EJEM03", "Nomina", "", 96000.00, null],
       ["03/07/2026", "BR0000EJEM04", "Comision por acreditacion de nomina", "", 9.00, null],
-      ["04/07/2026", "BR0000EJEM05", "PAGO DE SERVICIO RECIBIDO por BancaMovil | Tarjeta 9200XXXXXX0003", "Comercio de ejemplo A", null, 780.25]
+      ["04/07/2026", "BR0000EJEM05", "PAGO DE SERVICIO RECIBIDO por BancaMovil | Tarjeta 9200XXXXXX0003", "Comercio de ejemplo A", null, 780.25],
+      ["04/07/2026", "BR0000EJEM06", "Comision por cobro", "Comercio de ejemplo A", 20.31, null],
+      ["04/07/2026", "BR0000EJEM07", "Bonificación", "Comercio de ejemplo A", null, 125.75],
+      ["04/07/2026", "BR0000EJEM08", "Transferencia automática", "Comercio de ejemplo B", 3480.50, null],
+      ["04/07/2026", "BR0000EJEM09", "Transferencia automática", "", 50000.00, null]
     ];
     var opening = 100000, run = opening, rows = [];
     raw.forEach(function (r) {
       run = Math.round((run - (r[4] || 0) + (r[5] || 0)) * 100) / 100;
       rows.push({
-        fecha: r[0], ref: r[1], desc: r[2], comercio: r[3], debito: r[4], credito: r[5],
+        fecha: r[0], ref: r[1], desc: r[2], comercio: r[3], concepto: concepto(r[2]),
+        debito: r[4], credito: r[5],
         saldoBanco: run, saldoCalc: run, dif: 0, obs: r[2], pagina: 1
       });
     });
