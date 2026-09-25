@@ -694,96 +694,249 @@ https://github.com/nodeca/pako/blob/main/LICENSE
       cell.font = { name: "Arial", size: i === 0 ? 10 : 9, bold: i === 0, italic: i > 0 };
     });
 
-    /* --- resumen: una fila por cada par comercio × concepto --- */
-    var ws2 = wb.addWorksheet("Resumen", { views: [{ state: "frozen", ySplit: 1 }] });
-    ws2.columns = [{ width: 32 }, { width: 26 }, { width: 18 }, { width: 18 }, { width: 18 }];
-    var h2 = ws2.getRow(1);
-    ["Comercio / Beneficiario", "Concepto", "Nº de operaciones", "Crédito (CUP)", "Débito (CUP)"].forEach(function (h, i) {
+    /* --- resumen: informe por comercio y concepto --- */
+    var NAVY = "FF1F3864", BAND = "FFD9E2F3", SOFT = "FFF4F7FC", GREY = "FFE7E9EC";
+    var MONEY_N = '#,##0.00;[Red]-#,##0.00;"-"';
+    var THIN = { style: "thin", color: { argb: "FFB4BCC8" } };
+    var BOX = { top: THIN, left: THIN, bottom: THIN, right: THIN };
+
+    var ws2 = wb.addWorksheet("Resumen", {
+      views: [{ state: "frozen", ySplit: 5 }],
+      pageSetup: {
+        paperSize: 9, orientation: "portrait", fitToPage: true, fitToWidth: 1, fitToHeight: 0,
+        horizontalCentered: true,
+        margins: { left: 0.5, right: 0.5, top: 0.6, bottom: 0.6, header: 0.3, footer: 0.3 }
+      }
+    });
+    ws2.pageSetup.printTitlesRow = "5:5";
+    ws2.headerFooter = { oddFooter: "&LResumen de operaciones&CPagina &P de &N&R&D" };
+    ws2.columns = [{ width: 30 }, { width: 26 }, { width: 11 }, { width: 16 }, { width: 16 }, { width: 16 }];
+
+    /* Cita un texto para usarlo como criterio literal dentro de una formula. */
+    function q(t) { return '"' + String(t).replace(/"/g, '""') + '"'; }
+
+    /* Etiqueta de las operaciones de la cuenta que no pertenecen a ningun comercio. */
+    var SIN_COM = "Sin comercio asociado";
+
+    function banner(rn, txt, size, fg, bg) {
+      ws2.mergeCells(rn, 1, rn, 6);
+      var c = ws2.getRow(rn).getCell(1);
+      c.value = txt;
+      c.font = { name: "Arial", size: size, bold: true, color: { argb: fg } };
+      c.alignment = { horizontal: "left", vertical: "middle", indent: 1 };
+      if (bg) c.fill = { type: "pattern", pattern: "solid", fgColor: { argb: bg } };
+      return c;
+    }
+
+    /* Encabezado del informe */
+    ws2.getRow(1).height = 26;
+    banner(1, "RESUMEN DE OPERACIONES POR COMERCIO Y CONCEPTO", 13, "FFFFFFFF", NAVY);
+    banner(2, "Cuenta: " + (data.meta.cuenta || "—") + "   ·   Período: " + (data.meta.periodo || "—"), 10, "FF1F3864", SOFT);
+    banner(3, "Importes en CUP   ·   Generado el " + new Date().toLocaleDateString("es-CU") +
+      "   ·   " + data.rows.length + " operaciones extraídas de " + data.meta.paginas + " página(s) del PDF",
+      9, "FF5A6472", SOFT).font = { name: "Arial", size: 9, italic: true, color: { argb: "FF5A6472" } };
+    ws2.getRow(4).height = 6;
+
+    var HEAD2 = ["Comercio / Beneficiario", "Concepto", "Nº de op.", "Crédito (CUP)", "Débito (CUP)", "Neto (CUP)"];
+    var h2 = ws2.getRow(5);
+    h2.height = 30;
+    HEAD2.forEach(function (h, i) {
       var c = h2.getCell(i + 1);
       c.value = h;
       c.font = { name: "Arial", size: 10, bold: true, color: { argb: "FFFFFFFF" } };
-      c.fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FF1F3864" } };
-      c.alignment = { horizontal: "center", wrapText: true };
+      c.fill = { type: "pattern", pattern: "solid", fgColor: { argb: NAVY } };
+      c.alignment = { horizontal: i < 2 ? "left" : "center", vertical: "middle", wrapText: true, indent: i < 2 ? 1 : 0 };
+      c.border = BOX;
     });
 
-    var agg = {}, order = [];
+    /* Agregado por par comercio x concepto, y en paralelo por concepto suelto. */
+    var agg = {}, order = [], porConcepto = {};
     data.rows.forEach(function (r) {
-      var com = r.comercio || "(sin comercio)";
+      var com = r.comercio || SIN_COM;
       var con = r.concepto || concepto(r.obs || r.desc);
-      var k = com + "\u0000" + con;
+      var k = com + " » " + con;
       if (!agg[k]) { agg[k] = { com: com, con: con, n: 0, cr: 0, db: 0 }; order.push(k); }
       agg[k].n++; agg[k].cr += r.credito || 0; agg[k].db += r.debito || 0;
+      porConcepto[con] = porConcepto[con] || { n: 0, cr: 0, db: 0 };
+      porConcepto[con].n++; porConcepto[con].cr += r.credito || 0; porConcepto[con].db += r.debito || 0;
     });
 
-    /* Comercios alfabéticos ("(sin comercio)" al final); dentro, conceptos en orden fijo. */
+    /* Comercios alfabeticos, "(sin comercio)" al final; dentro, conceptos en orden fijo. */
     var keys = order.sort(function (ka, kb) {
-      var a2 = agg[ka], b2 = agg[kb];
-      if (a2.com !== b2.com) {
-        if (a2.com === "(sin comercio)") return 1;
-        if (b2.com === "(sin comercio)") return -1;
-        return a2.com.localeCompare(b2.com, "es");
+      var x = agg[ka], y = agg[kb];
+      if (x.com !== y.com) {
+        if (x.com === SIN_COM) return 1;
+        if (y.com === SIN_COM) return -1;
+        return x.com.localeCompare(y.com, "es");
       }
-      return CONCEPTO_ORDEN.indexOf(a2.con) - CONCEPTO_ORDEN.indexOf(b2.con);
+      return CONCEPTO_ORDEN.indexOf(x.con) - CONCEPTO_ORDEN.indexOf(y.con);
     });
 
-    /* Filas de detalle + un subtotal por comercio cuando tiene más de un concepto. */
     var D = "Movimientos!$D$3:$D$" + last, K = "Movimientos!$K$3:$K$" + last;
     var CR = "Movimientos!$F$3:$F$" + last, DB = "Movimientos!$E$3:$E$" + last;
-    var n = 1, subtotalRows = [], blocks = [];
+
+    var n = 5, merges = [], subtotalRows = [], detailRows = [], shadedRows = [];
+    var blockStart = 0, blockRows = [], shade = false;
+
+    function cierraBloque(com) {
+      if (!blockRows.length) return;
+      if (blockRows.length > 1) {
+        n++;
+        var sr = ws2.getRow(n), f = blockRows[0], l2 = blockRows[blockRows.length - 1];
+        sr.getCell(2).value = "Subtotal " + com;
+        sr.getCell(3).value = { formula: "SUM(C" + f + ":C" + l2 + ")" };
+        sr.getCell(4).value = { formula: "SUM(D" + f + ":D" + l2 + ")" };
+        sr.getCell(5).value = { formula: "SUM(E" + f + ":E" + l2 + ")" };
+        sr.getCell(6).value = { formula: "D" + n + "-E" + n };
+        subtotalRows.push(n);
+      }
+      if (n > blockStart) merges.push([blockStart, n]);
+      blockRows = [];
+      shade = !shade;
+    }
 
     keys.forEach(function (k, i) {
-      var g = agg[k];
-      var prev = i ? agg[keys[i - 1]] : null;
-      if (prev && prev.com !== g.com) flushSubtotal(prev.com);
+      var g = agg[k], prev = i ? agg[keys[i - 1]] : null;
+      if (prev && prev.com !== g.com) cierraBloque(prev.com);
       n++;
+      if (!blockRows.length) blockStart = n;
       var row = ws2.getRow(n);
-      var critCom = g.com === "(sin comercio)" ? '""' : "$A" + n;
+      var critCom = g.com === SIN_COM ? '""' : q(g.com);
       row.getCell(1).value = g.com;
       row.getCell(2).value = g.con;
-      row.getCell(3).value = { formula: "COUNTIFS(" + D + "," + critCom + "," + K + ",$B" + n + ")", result: g.n };
-      row.getCell(4).value = { formula: "SUMIFS(" + CR + "," + D + "," + critCom + "," + K + ",$B" + n + ")", result: Math.round(g.cr * 100) / 100 };
-      row.getCell(5).value = { formula: "SUMIFS(" + DB + "," + D + "," + critCom + "," + K + ",$B" + n + ")", result: Math.round(g.db * 100) / 100 };
-      blocks.push(n);
+      row.getCell(3).value = { formula: "COUNTIFS(" + D + "," + critCom + "," + K + "," + q(g.con) + ")", result: g.n };
+      row.getCell(4).value = { formula: "SUMIFS(" + CR + "," + D + "," + critCom + "," + K + "," + q(g.con) + ")", result: Math.round(g.cr * 100) / 100 };
+      row.getCell(5).value = { formula: "SUMIFS(" + DB + "," + D + "," + critCom + "," + K + "," + q(g.con) + ")", result: Math.round(g.db * 100) / 100 };
+      row.getCell(6).value = { formula: "D" + n + "-E" + n, result: Math.round((g.cr - g.db) * 100) / 100 };
+      if (shade) shadedRows.push(n);
+      blockRows.push(n);
+      detailRows.push(n);
     });
-    if (keys.length) flushSubtotal(agg[keys[keys.length - 1]].com);
+    if (keys.length) cierraBloque(agg[keys[keys.length - 1]].com);
 
-    function flushSubtotal(com) {
-      if (blocks.length < 2) { blocks = []; return; }   /* un solo concepto: sin subtotal */
-      var first = blocks[0], lastB = blocks[blocks.length - 1];
-      n++;
-      var row = ws2.getRow(n);
-      row.getCell(2).value = "Subtotal " + com;
-      row.getCell(3).value = { formula: "SUM(C" + first + ":C" + lastB + ")" };
-      row.getCell(4).value = { formula: "SUM(D" + first + ":D" + lastB + ")" };
-      row.getCell(5).value = { formula: "SUM(E" + first + ":E" + lastB + ")" };
-      subtotalRows.push(n);
-      blocks = [];
-    }
-
-    /* El TOTAL suma sólo las filas de detalle, nunca los subtotales. */
-    var detailRows = [];
-    for (var d = 2; d <= n; d++) if (subtotalRows.indexOf(d) === -1) detailRows.push(d);
-    function sumDetail(col) {
+    /* TOTAL GENERAL: suma solo las filas de detalle, nunca los subtotales. */
+    function sumDetalle(col) {
       return detailRows.map(function (r) { return col + r; }).join("+") || "0";
     }
-    var rt = n + 1, tr = ws2.getRow(rt);
-    tr.getCell(1).value = "TOTAL";
-    tr.getCell(3).value = { formula: sumDetail("C"), result: data.rows.length };
-    tr.getCell(4).value = { formula: sumDetail("D"), result: Math.round(data.totalCredito * 100) / 100 };
-    tr.getCell(5).value = { formula: sumDetail("E"), result: Math.round(data.totalDebito * 100) / 100 };
+    n++;
+    var rt = n, tr = ws2.getRow(rt);
+    ws2.mergeCells(rt, 1, rt, 2);
+    tr.getCell(1).value = "TOTAL GENERAL";
+    tr.getCell(3).value = { formula: sumDetalle("C"), result: data.rows.length };
+    tr.getCell(4).value = { formula: sumDetalle("D"), result: Math.round(data.totalCredito * 100) / 100 };
+    tr.getCell(5).value = { formula: sumDetalle("E"), result: Math.round(data.totalDebito * 100) / 100 };
+    tr.getCell(6).value = { formula: "D" + rt + "-E" + rt, result: Math.round((data.totalCredito - data.totalDebito) * 100) / 100 };
 
-    for (var n3 = 2; n3 <= rt; n3++) {
-      var isSub = subtotalRows.indexOf(n3) !== -1;
-      for (var c3 = 1; c3 <= 5; c3++) {
-        var cc = ws2.getRow(n3).getCell(c3);
-        cc.font = { name: "Arial", size: 10, bold: n3 === rt || isSub, italic: isSub };
-        if (c3 === 3) cc.numFmt = "#,##0";
-        if (c3 >= 4) cc.numFmt = MONEY;
-        if (n3 === rt) cc.fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FFD9E2F3" } };
-        else if (isSub) cc.fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FFEDEDED" } };
+    /* Estilo del bloque principal */
+    for (var r2 = 6; r2 <= rt; r2++) {
+      var esSub = subtotalRows.indexOf(r2) !== -1, esTot = r2 === rt, esGris = shadedRows.indexOf(r2) !== -1;
+      for (var c2 = 1; c2 <= 6; c2++) {
+        var cc = ws2.getRow(r2).getCell(c2);
+        cc.border = BOX;
+        cc.font = { name: "Arial", size: 10, bold: esSub || esTot, italic: esSub && c2 === 2 };
+        cc.alignment = {
+          horizontal: c2 <= 2 ? "left" : c2 === 3 ? "center" : "right",
+          vertical: c2 === 1 ? "middle" : "center", wrapText: c2 <= 2, indent: c2 <= 2 ? 1 : 1
+        };
+        if (c2 === 3) cc.numFmt = "#,##0";
+        if (c2 >= 4) cc.numFmt = MONEY_N;
+        if (esTot) cc.fill = { type: "pattern", pattern: "solid", fgColor: { argb: BAND } };
+        else if (esSub) cc.fill = { type: "pattern", pattern: "solid", fgColor: { argb: GREY } };
+        else if (esGris) cc.fill = { type: "pattern", pattern: "solid", fgColor: { argb: SOFT } };
       }
     }
-    ws2.autoFilter = { from: "A1", to: "E1" };
+    /* Una sola celda de comercio por bloque. */
+    merges.forEach(function (m) { if (m[1] > m[0]) ws2.mergeCells(m[0], 1, m[1], 1); });
+
+    /* --- bloque 2: totales por concepto (todos los comercios juntos) --- */
+    n = rt + 2;
+    banner(n, "TOTALES POR CONCEPTO", 11, "FFFFFFFF", NAVY);
+    n++;
+    var hc = ws2.getRow(n);
+    ["Concepto", "", "Nº de op.", "Crédito (CUP)", "Débito (CUP)", "Neto (CUP)"].forEach(function (h, i) {
+      var c = hc.getCell(i + 1);
+      c.value = h;
+      c.font = { name: "Arial", size: 10, bold: true, color: { argb: NAVY } };
+      c.fill = { type: "pattern", pattern: "solid", fgColor: { argb: BAND } };
+      c.alignment = { horizontal: i < 2 ? "left" : i === 2 ? "center" : "right", indent: 1 };
+      c.border = BOX;
+    });
+    ws2.mergeCells(n, 1, n, 2);
+
+    var concFilas = [];
+    CONCEPTO_ORDEN.filter(function (c) { return porConcepto[c]; }).forEach(function (con) {
+      n++;
+      var g = porConcepto[con], row = ws2.getRow(n);
+      row.getCell(1).value = con;
+      row.getCell(3).value = { formula: "COUNTIF(" + K + "," + q(con) + ")", result: g.n };
+      row.getCell(4).value = { formula: "SUMIF(" + K + "," + q(con) + "," + CR + ")", result: Math.round(g.cr * 100) / 100 };
+      row.getCell(5).value = { formula: "SUMIF(" + K + "," + q(con) + "," + DB + ")", result: Math.round(g.db * 100) / 100 };
+      row.getCell(6).value = { formula: "D" + n + "-E" + n, result: Math.round((g.cr - g.db) * 100) / 100 };
+      ws2.mergeCells(n, 1, n, 2);
+      concFilas.push(n);
+    });
+    n++;
+    var ctRow = n, ct = ws2.getRow(ctRow);
+    ct.getCell(1).value = "TOTAL";
+    ct.getCell(3).value = { formula: "SUM(C" + concFilas[0] + ":C" + concFilas[concFilas.length - 1] + ")", result: data.rows.length };
+    ct.getCell(4).value = { formula: "SUM(D" + concFilas[0] + ":D" + concFilas[concFilas.length - 1] + ")", result: Math.round(data.totalCredito * 100) / 100 };
+    ct.getCell(5).value = { formula: "SUM(E" + concFilas[0] + ":E" + concFilas[concFilas.length - 1] + ")", result: Math.round(data.totalDebito * 100) / 100 };
+    ct.getCell(6).value = { formula: "D" + ctRow + "-E" + ctRow, result: Math.round((data.totalCredito - data.totalDebito) * 100) / 100 };
+    ws2.mergeCells(ctRow, 1, ctRow, 2);
+
+    for (var r3 = concFilas[0]; r3 <= ctRow; r3++) {
+      for (var c4 = 1; c4 <= 6; c4++) {
+        var c5 = ws2.getRow(r3).getCell(c4);
+        c5.border = BOX;
+        c5.font = { name: "Arial", size: 10, bold: r3 === ctRow };
+        c5.alignment = { horizontal: c4 <= 2 ? "left" : c4 === 3 ? "center" : "right", indent: 1 };
+        if (c4 === 3) c5.numFmt = "#,##0";
+        if (c4 >= 4) c5.numFmt = MONEY_N;
+        if (r3 === ctRow) c5.fill = { type: "pattern", pattern: "solid", fgColor: { argb: BAND } };
+      }
+    }
+
+    /* --- bloque 3: cuadre del periodo --- */
+    n = ctRow + 2;
+    banner(n, "CUADRE DEL PERÍODO", 11, "FFFFFFFF", NAVY);
+    var saldoFinalBanco = data.rows.length ? data.rows[data.rows.length - 1].saldoBanco : data.opening;
+    var cuadre = [
+      ["Saldo inicial", "Movimientos!$G$2", data.opening, false],
+      ["(+) Total créditos del período", "Movimientos!$F$" + tot, data.totalCredito, false],
+      ["(−) Total débitos del período", "Movimientos!$E$" + tot, data.totalDebito, false],
+      ["(=) Saldo final calculado", "Movimientos!$G$" + tot, data.closing, true],
+      ["Saldo final según el banco", "Movimientos!$H$" + tot, saldoFinalBanco, false],
+      ["Diferencia (debe ser 0.00)", "Movimientos!$I$" + tot, 0, true]
+    ];
+    var cuadreIni = n + 1;
+    cuadre.forEach(function (it, i) {
+      var rn = cuadreIni + i, row = ws2.getRow(rn);
+      row.getCell(1).value = it[0];
+      row.getCell(5).value = { formula: it[1], result: it[2] };
+      for (var c6 = 1; c6 <= 6; c6++) {
+        var cq = row.getCell(c6);
+        cq.border = BOX;
+        cq.font = { name: "Arial", size: 10, bold: it[3], color: { argb: it[3] ? NAVY : "FF000000" } };
+        cq.alignment = { horizontal: c6 <= 4 ? "left" : "right", indent: 1 };
+        if (c6 >= 5) cq.numFmt = MONEY_N;
+        if (it[3]) cq.fill = { type: "pattern", pattern: "solid", fgColor: { argb: BAND } };
+      }
+      ws2.mergeCells(rn, 1, rn, 4);
+      ws2.mergeCells(rn, 5, rn, 6);
+    });
+
+    var avisoRow = cuadreIni + cuadre.length + 1;
+    var aviso = ws2.getRow(avisoRow).getCell(1);
+    aviso.value = data.mismatches === 0
+      ? "Cuadre correcto: el saldo calculado coincide con el del banco en todas las operaciones."
+      : "ATENCIÓN: " + data.mismatches + " operación(es) con diferencia. Revise la columna Diferencia de la hoja Movimientos.";
+    aviso.font = {
+      name: "Arial", size: 9, italic: true, bold: data.mismatches !== 0,
+      color: { argb: data.mismatches === 0 ? "FF2E7D32" : "FFC62828" }
+    };
+    aviso.alignment = { horizontal: "left", indent: 1 };
+    ws2.mergeCells(avisoRow, 1, avisoRow, 6);
+
     return wb;
   }
 
