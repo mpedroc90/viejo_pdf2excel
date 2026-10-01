@@ -289,7 +289,7 @@
       <li>El PDF trae un solo importe con indicador <code>CR</code> / <code>DB</code>: <code>CR</code> va a <b>Crédito</b> y <code>DB</code> a <b>Débito</b>.</li>
       <li>La fecha sólo se imprime cuando cambia; se arrastra hacia las filas siguientes.</li>
       <li>De <i>Observaciones</i> extrae el concepto (<code>DET PAGO</code>), el comercio (<code>DATOS BENEFI COMERCIO</code>) y la tarjeta; el texto íntegro queda en la última columna del Excel.</li>
-      <li>Si la fecha de la descripción (<code>FECHA:</code>, <code>FECHA CONTABLE:</code> o <code>FECHA PAGO</code>) cae en otro mes que la fecha de la fila, la operación se clasifica como <b>Tránsito</b>.</li>
+      <li>Si la fecha de la descripción (<code>FECHA:</code>, <code>FECHA CONTABLE:</code> o <code>FECHA PAGO</code>) cae en otro mes que la fecha de la fila, la operación es de <b>Tránsito</b>: conserva su concepto con el prefijo <code>Tránsito · </code> (p. ej. <code>Tránsito · Pago recibido</code>).</li>
       <li>El saldo del Excel es una <b>fórmula</b> (<code>saldo anterior − débito + crédito</code>) y se compara con el saldo impreso: la columna <i>Diferencia</i> debe dar 0 en todas las filas.</li>
       <li>Si un comercio del PDF no está en la lista conocida, se pregunta una sola vez a cuál corresponde (o si se ignora). La elección se guarda en este navegador.</li>
     </ul>
@@ -493,7 +493,12 @@ https://github.com/nodeca/pako/blob/main/LICENSE
     { re: /PAGO\s+DE\s+SERVICIO|DET\s*PAGO/i, cat: "Pago recibido" }
   ];
   /* Orden de presentación dentro de cada comercio (distinto del orden de coincidencia). */
-  var CONCEPTO_ORDEN = ["Pago recibido", "Tránsito", "Comisión", "Transferencia automática", "Bonificación", "Nómina", "Otro"];
+  var CONCEPTO_ORDEN = ["Pago recibido", "Comisión", "Transferencia automática", "Bonificación", "Nómina", "Otro"];
+  /* Tránsito es un grupo: la fila conserva su concepto con el prefijo "Tránsito · ". */
+  var TRANSITO = "Tránsito · ";
+  function conceptoTransito(c) { return TRANSITO + c; }
+  var CONCEPTO_TRANSITO = CONCEPTO_ORDEN.map(conceptoTransito);
+  var CONCEPTO_TODOS = CONCEPTO_ORDEN.concat(CONCEPTO_TRANSITO);
 
   /* Quita tildes: el PDF escribe "COMISION"/"BONIFICACION" sin acentos,
      pero la descripción ya normalizada puede llevarlos. */
@@ -734,7 +739,7 @@ https://github.com/nodeca/pako/blob/main/LICENSE
           comercio: f.comercio,
           comercioPdf: f.comercioPdf,
           comercioFijo: f.comercioFijo,
-          concepto: esTransito(fecha, f.obs) ? "Tránsito" : f.concepto,
+          concepto: esTransito(fecha, f.obs) ? conceptoTransito(f.concepto) : f.concepto,
           debito: t.oper === "DB" ? imp : null,
           credito: t.oper === "DB" ? null : imp,
           saldoBanco: num(t.saldo.join("")),
@@ -847,8 +852,8 @@ https://github.com/nodeca/pako/blob/main/LICENSE
       "• El “Saldo calculado” es una fórmula: saldo anterior − débito + crédito. El “Saldo según banco” es el que imprime el PDF.",
       "• La columna Diferencia debe ser 0 en todas las filas (comprobación de la extracción).",
       "• El saldo inicial (en azul) es el único importe fijo; proviene de la primera línea del estado de cuenta.",
-      "• La columna K (oculta) guarda el Concepto de cada fila (Pago recibido, Tránsito, Comisión, Transferencia automática, Bonificación, Nómina). La hoja Resumen abre una fila por cada par comercio × concepto.",
-      "• Tránsito: operación cuya fecha en la descripción (FECHA / FECHA CONTABLE / FECHA PAGO) cae en un mes distinto al de la fila."
+      "• La columna K (oculta) guarda el Concepto de cada fila (Pago recibido, Comisión, Transferencia automática, Bonificación, Nómina, Otro). La hoja Resumen muestra, por comercio, todos los conceptos, el grupo Tránsito con su subtotal y el subtotal del comercio.",
+      "• Tránsito: operación cuya fecha en la descripción (FECHA / FECHA CONTABLE / FECHA PAGO) cae en un mes distinto al de la fila; conserva su concepto con el prefijo “Tránsito · ”."
     ];
     notes.forEach(function (txt, i) {
       var cell = ws.getRow(tot + 2 + i).getCell(3);
@@ -858,6 +863,8 @@ https://github.com/nodeca/pako/blob/main/LICENSE
 
     /* --- resumen: informe por comercio y concepto --- */
     var NAVY = "FF1F3864", BAND = "FFD9E2F3", SOFT = "FFF4F7FC", GREY = "FFE7E9EC";
+    /* Grupo Tránsito: tono ámbar para separarlo de los conceptos del mes. */
+    var TR_TEXT = "FF8A4B0F", TR_HEAD = "FFFBE3C4", TR_SOFT = "FFFFF7EC";
     var MONEY_N = '#,##0.00;[Red]-#,##0.00;"-"';
     var THIN = { style: "thin", color: { argb: "FFB4BCC8" } };
     var BOX = { top: THIN, left: THIN, bottom: THIN, right: THIN };
@@ -927,13 +934,14 @@ https://github.com/nodeca/pako/blob/main/LICENSE
     order.map(function (k) { return agg[k].com; })
       .filter(function (com, i, arr) { return arr.indexOf(com) === i; })
       .forEach(function (com) {
-        CONCEPTO_ORDEN.forEach(function (con) {
+        CONCEPTO_TODOS.forEach(function (con) {
           var k = com + " » " + con;
           if (!agg[k]) { agg[k] = { com: com, con: con, n: 0, cr: 0, db: 0 }; order.push(k); }
         });
       });
 
-    /* Comercios alfabeticos, "(sin comercio)" al final; dentro, conceptos en orden fijo. */
+    /* Comercios alfabeticos, "(sin comercio)" al final; dentro, conceptos en orden fijo
+       (primero los regulares, luego el grupo Tránsito). */
     var keys = order.sort(function (ka, kb) {
       var x = agg[ka], y = agg[kb];
       if (x.com !== y.com) {
@@ -941,55 +949,90 @@ https://github.com/nodeca/pako/blob/main/LICENSE
         if (y.com === SIN_COM) return -1;
         return x.com.localeCompare(y.com, "es");
       }
-      return CONCEPTO_ORDEN.indexOf(x.con) - CONCEPTO_ORDEN.indexOf(y.con);
+      return CONCEPTO_TODOS.indexOf(x.con) - CONCEPTO_TODOS.indexOf(y.con);
     });
 
     var D = "Movimientos!$D$3:$D$" + last, K = "Movimientos!$K$3:$K$" + last;
     var CR = "Movimientos!$F$3:$F$" + last, DB = "Movimientos!$E$3:$E$" + last;
 
-    var n = 5, merges = [], subtotalRows = [], detailRows = [], shadedRows = [];
-    var blockStart = 0, blockRows = [], shade = false;
+    var n = 5, merges = [], subtotalRows = [], comercioRows = [], shadedRows = [];
+    var trHeadRows = [], trSubRows = [], trDetRows = [];
 
+    /* Fila de cabecera del grupo Tránsito (columnas B:F combinadas). */
+    function cabeceraTransito(r, desde) {
+      ws2.getRow(r).getCell(desde).value = "EN TRÁNSITO (fecha de la operación en otro mes)";
+    }
+    /* En el Resumen el grupo ya dice "Tránsito": se muestra el concepto sin prefijo. */
+    function etiquetaConcepto(con) {
+      return con.indexOf(TRANSITO) === 0 ? con.slice(TRANSITO.length) : con;
+    }
+    var blockStart = 0, blockRows = [], trRows = [], shade = false;
+
+    function sumFilas(col, filas) {
+      return filas.map(function (r) { return col + r; }).join("+") || "0";
+    }
+
+    /* Cierra un comercio: Subtotal Tránsito (solo su grupo) y Subtotal del comercio
+       (regulares + Subtotal Tránsito). */
     function cierraBloque(com) {
       if (!blockRows.length) return;
-      if (blockRows.length > 1) {
+      var regRows = blockRows.filter(function (r) { return trRows.indexOf(r) === -1; });
+      var partes = regRows.slice();
+      if (trRows.length) {
         n++;
-        var sr = ws2.getRow(n), f = blockRows[0], l2 = blockRows[blockRows.length - 1];
+        var ts = ws2.getRow(n);
+        ts.getCell(2).value = "Subtotal Tránsito";
+        ["C", "D", "E"].forEach(function (col, i) {
+          ts.getCell(3 + i).value = { formula: sumFilas(col, trRows) };
+        });
+        ts.getCell(6).value = { formula: "D" + n + "-E" + n };
+        trSubRows.push(n);
+        partes.push(n);
+      }
+      if (partes.length > 1) {
+        n++;
+        var sr = ws2.getRow(n);
         sr.getCell(2).value = "Subtotal " + com;
-        sr.getCell(3).value = { formula: "SUM(C" + f + ":C" + l2 + ")" };
-        sr.getCell(4).value = { formula: "SUM(D" + f + ":D" + l2 + ")" };
-        sr.getCell(5).value = { formula: "SUM(E" + f + ":E" + l2 + ")" };
+        ["C", "D", "E"].forEach(function (col, i) {
+          sr.getCell(3 + i).value = { formula: sumFilas(col, partes) };
+        });
         sr.getCell(6).value = { formula: "D" + n + "-E" + n };
         subtotalRows.push(n);
       }
+      comercioRows.push(n);
       if (n > blockStart) merges.push([blockStart, n]);
-      blockRows = [];
+      blockRows = []; trRows = [];
       shade = !shade;
     }
 
     keys.forEach(function (k, i) {
       var g = agg[k], prev = i ? agg[keys[i - 1]] : null;
       if (prev && prev.com !== g.com) cierraBloque(prev.com);
+      var esTr = CONCEPTO_TRANSITO.indexOf(g.con) !== -1;
       n++;
       if (!blockRows.length) blockStart = n;
+      if (esTr && !trRows.length) {
+        ws2.getRow(n).getCell(1).value = g.com;
+        cabeceraTransito(n, 2);
+        trHeadRows.push(n);
+        n++;
+      }
       var row = ws2.getRow(n);
       var critCom = g.com === SIN_COM ? '""' : q(g.com);
       row.getCell(1).value = g.com;
-      row.getCell(2).value = g.con;
+      row.getCell(2).value = etiquetaConcepto(g.con);
       row.getCell(3).value = { formula: "COUNTIFS(" + D + "," + critCom + "," + K + "," + q(g.con) + ")", result: g.n };
       row.getCell(4).value = { formula: "SUMIFS(" + CR + "," + D + "," + critCom + "," + K + "," + q(g.con) + ")", result: Math.round(g.cr * 100) / 100 };
       row.getCell(5).value = { formula: "SUMIFS(" + DB + "," + D + "," + critCom + "," + K + "," + q(g.con) + ")", result: Math.round(g.db * 100) / 100 };
       row.getCell(6).value = { formula: "D" + n + "-E" + n, result: Math.round((g.cr - g.db) * 100) / 100 };
-      if (shade) shadedRows.push(n);
+      if (shade && !esTr) shadedRows.push(n);
       blockRows.push(n);
-      detailRows.push(n);
+      if (esTr) { trRows.push(n); trDetRows.push(n); }
     });
     if (keys.length) cierraBloque(agg[keys[keys.length - 1]].com);
 
-    /* TOTAL GENERAL: suma solo las filas de detalle, nunca los subtotales. */
-    function sumDetalle(col) {
-      return detailRows.map(function (r) { return col + r; }).join("+") || "0";
-    }
+    /* TOTAL GENERAL: suma el subtotal de cada comercio (incluye su Tránsito). */
+    function sumDetalle(col) { return sumFilas(col, comercioRows); }
     n++;
     var rt = n, tr = ws2.getRow(rt);
     ws2.mergeCells(rt, 1, rt, 2);
@@ -1002,21 +1045,36 @@ https://github.com/nodeca/pako/blob/main/LICENSE
     /* Estilo del bloque principal */
     for (var r2 = 6; r2 <= rt; r2++) {
       var esSub = subtotalRows.indexOf(r2) !== -1, esTot = r2 === rt, esGris = shadedRows.indexOf(r2) !== -1;
+      var esTrHead = trHeadRows.indexOf(r2) !== -1, esTrSub = trSubRows.indexOf(r2) !== -1;
+      var esTrDet = trDetRows.indexOf(r2) !== -1, esTrAny = esTrHead || esTrSub || esTrDet;
       for (var c2 = 1; c2 <= 6; c2++) {
         var cc = ws2.getRow(r2).getCell(c2);
         cc.border = BOX;
-        cc.font = { name: "Arial", size: 10, bold: esSub || esTot, italic: esSub && c2 === 2 };
+        cc.font = {
+          name: "Arial", size: esTrHead ? 9 : 10, bold: esSub || esTot || esTrHead || esTrSub,
+          italic: (esSub || esTrSub) && c2 === 2,
+          color: esTrAny && c2 > 1 ? { argb: TR_TEXT } : undefined
+        };
         cc.alignment = {
           horizontal: c2 <= 2 ? "left" : c2 === 3 ? "center" : "right",
-          vertical: c2 === 1 ? "middle" : "center", wrapText: c2 <= 2, indent: c2 <= 2 ? 1 : 1
+          vertical: c2 === 1 ? "middle" : "center", wrapText: c2 <= 2,
+          indent: c2 === 2 && esTrDet ? 3 : 1
         };
         if (c2 === 3) cc.numFmt = "#,##0";
         if (c2 >= 4) cc.numFmt = MONEY_N;
+        /* Columna A va combinada por comercio: manda el sombreado del bloque. */
+        if (c2 === 1 && !esTot) {
+          if (esGris) cc.fill = { type: "pattern", pattern: "solid", fgColor: { argb: SOFT } };
+          continue;
+        }
         if (esTot) cc.fill = { type: "pattern", pattern: "solid", fgColor: { argb: BAND } };
+        else if (esTrHead || esTrSub) cc.fill = { type: "pattern", pattern: "solid", fgColor: { argb: TR_HEAD } };
+        else if (esTrDet) cc.fill = { type: "pattern", pattern: "solid", fgColor: { argb: TR_SOFT } };
         else if (esSub) cc.fill = { type: "pattern", pattern: "solid", fgColor: { argb: GREY } };
         else if (esGris) cc.fill = { type: "pattern", pattern: "solid", fgColor: { argb: SOFT } };
       }
     }
+    trHeadRows.forEach(function (r) { ws2.mergeCells(r, 2, r, 6); });
     /* Una sola celda de comercio por bloque. */
     merges.forEach(function (m) { if (m[1] > m[0]) ws2.mergeCells(m[0], 1, m[1], 1); });
 
@@ -1035,37 +1093,61 @@ https://github.com/nodeca/pako/blob/main/LICENSE
     });
     ws2.mergeCells(n, 1, n, 2);
 
-    var concFilas = [];
-    /* Todos los conceptos, aunque no tengan movimientos (salen a cero). */
-    CONCEPTO_ORDEN.forEach(function (con) {
+    var concFilas = [], trFilas = [], trHeadRow = 0;
+    /* Todos los conceptos, aunque no tengan movimientos (salen a cero):
+       regulares, luego el grupo Tránsito con su cabecera y subtotal. */
+    CONCEPTO_TODOS.forEach(function (con) {
+      var esTr = CONCEPTO_TRANSITO.indexOf(con) !== -1;
       n++;
+      if (esTr && !trHeadRow) {
+        trHeadRow = n;
+        cabeceraTransito(n, 1);
+        ws2.mergeCells(n, 1, n, 6);
+        n++;
+      }
       var g = porConcepto[con] || { n: 0, cr: 0, db: 0 }, row = ws2.getRow(n);
-      row.getCell(1).value = con;
+      row.getCell(1).value = etiquetaConcepto(con);
       row.getCell(3).value = { formula: "COUNTIF(" + K + "," + q(con) + ")", result: g.n };
       row.getCell(4).value = { formula: "SUMIF(" + K + "," + q(con) + "," + CR + ")", result: Math.round(g.cr * 100) / 100 };
       row.getCell(5).value = { formula: "SUMIF(" + K + "," + q(con) + "," + DB + ")", result: Math.round(g.db * 100) / 100 };
       row.getCell(6).value = { formula: "D" + n + "-E" + n, result: Math.round((g.cr - g.db) * 100) / 100 };
       ws2.mergeCells(n, 1, n, 2);
       concFilas.push(n);
+      if (esTr) trFilas.push(n);
     });
+    n++;
+    var trSubRow = n, ts = ws2.getRow(trSubRow);
+    ts.getCell(1).value = "Subtotal Tránsito";
+    ["C", "D", "E"].forEach(function (col, i) {
+      ts.getCell(3 + i).value = { formula: sumFilas(col, trFilas) };
+    });
+    ts.getCell(6).value = { formula: "D" + trSubRow + "-E" + trSubRow };
+    ws2.mergeCells(trSubRow, 1, trSubRow, 2);
+    /* TOTAL: suma solo las filas de concepto, nunca el subtotal. */
     n++;
     var ctRow = n, ct = ws2.getRow(ctRow);
     ct.getCell(1).value = "TOTAL";
-    ct.getCell(3).value = { formula: "SUM(C" + concFilas[0] + ":C" + concFilas[concFilas.length - 1] + ")", result: data.rows.length };
-    ct.getCell(4).value = { formula: "SUM(D" + concFilas[0] + ":D" + concFilas[concFilas.length - 1] + ")", result: Math.round(data.totalCredito * 100) / 100 };
-    ct.getCell(5).value = { formula: "SUM(E" + concFilas[0] + ":E" + concFilas[concFilas.length - 1] + ")", result: Math.round(data.totalDebito * 100) / 100 };
+    ct.getCell(3).value = { formula: sumFilas("C", concFilas), result: data.rows.length };
+    ct.getCell(4).value = { formula: sumFilas("D", concFilas), result: Math.round(data.totalCredito * 100) / 100 };
+    ct.getCell(5).value = { formula: sumFilas("E", concFilas), result: Math.round(data.totalDebito * 100) / 100 };
     ct.getCell(6).value = { formula: "D" + ctRow + "-E" + ctRow, result: Math.round((data.totalCredito - data.totalDebito) * 100) / 100 };
     ws2.mergeCells(ctRow, 1, ctRow, 2);
 
     for (var r3 = concFilas[0]; r3 <= ctRow; r3++) {
+      var esTrH = r3 === trHeadRow || r3 === trSubRow, esTrD = trFilas.indexOf(r3) !== -1;
       for (var c4 = 1; c4 <= 6; c4++) {
         var c5 = ws2.getRow(r3).getCell(c4);
         c5.border = BOX;
-        c5.font = { name: "Arial", size: 10, bold: r3 === ctRow };
-        c5.alignment = { horizontal: c4 <= 2 ? "left" : c4 === 3 ? "center" : "right", indent: 1 };
+        c5.font = {
+          name: "Arial", size: r3 === trHeadRow ? 9 : 10, bold: r3 === ctRow || esTrH, italic: r3 === trSubRow,
+          color: esTrH || esTrD ? { argb: TR_TEXT } : undefined
+        };
+        c5.alignment = { horizontal: c4 <= 2 ? "left" : c4 === 3 ? "center" : "right", indent: c4 === 1 && esTrD ? 3 : 1 };
         if (c4 === 3) c5.numFmt = "#,##0";
         if (c4 >= 4) c5.numFmt = MONEY_N;
         if (r3 === ctRow) c5.fill = { type: "pattern", pattern: "solid", fgColor: { argb: BAND } };
+        else if (esTrH) c5.fill = { type: "pattern", pattern: "solid", fgColor: { argb: TR_HEAD } };
+        else if (esTrD) c5.fill = { type: "pattern", pattern: "solid", fgColor: { argb: TR_SOFT } };
       }
     }
 
