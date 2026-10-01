@@ -268,6 +268,7 @@
       <li>El PDF trae un solo importe con indicador <code>CR</code> / <code>DB</code>: <code>CR</code> va a <b>Crédito</b> y <code>DB</code> a <b>Débito</b>.</li>
       <li>La fecha sólo se imprime cuando cambia; se arrastra hacia las filas siguientes.</li>
       <li>De <i>Observaciones</i> extrae el concepto (<code>DET PAGO</code>), el comercio (<code>DATOS BENEFI COMERCIO</code>) y la tarjeta; el texto íntegro queda en la última columna del Excel.</li>
+      <li>Si la fecha de la descripción (<code>FECHA:</code>, <code>FECHA CONTABLE:</code> o <code>FECHA PAGO</code>) cae en otro mes que la fecha de la fila, la operación se clasifica como <b>Tránsito</b>.</li>
       <li>El saldo del Excel es una <b>fórmula</b> (<code>saldo anterior − débito + crédito</code>) y se compara con el saldo impreso: la columna <i>Diferencia</i> debe dar 0 en todas las filas.</li>
     </ul>
   </details>
@@ -456,7 +457,7 @@ https://github.com/nodeca/pako/blob/main/LICENSE
     { re: /PAGO\s+DE\s+SERVICIO|DET\s*PAGO/i, cat: "Pago recibido" }
   ];
   /* Orden de presentación dentro de cada comercio (distinto del orden de coincidencia). */
-  var CONCEPTO_ORDEN = ["Pago recibido", "Comisión", "Transferencia automática", "Bonificación", "Nómina", "Otro"];
+  var CONCEPTO_ORDEN = ["Pago recibido", "Tránsito", "Comisión", "Transferencia automática", "Bonificación", "Nómina", "Otro"];
 
   /* Quita tildes: el PDF escribe "COMISION"/"BONIFICACION" sin acentos,
      pero la descripción ya normalizada puede llevarlos. */
@@ -470,6 +471,23 @@ https://github.com/nodeca/pako/blob/main/LICENSE
       if (CONCEPTOS[i].re.test(t)) return CONCEPTOS[i].cat;
     }
     return "Otro";
+  }
+
+  /* Fecha que trae la descripción: "FECHA: 26.07.26", "FECHA CONTABLE: 30.07.2026"
+     o "FECHA PAGO 2026.08.04". El PDF corta el texto a mitad de palabra, de ahí los \s*. */
+  function fechaDesc(o) {
+    var m = o.match(/FECHA\s*:\s*(\d{2})\s*\.\s*(\d{2})\s*\.\s*(\d{2}(?:\d{2})?)/i)
+      || o.match(/FECHA\s*CONTABLE\s*:\s*(\d{2})\s*\.\s*(\d{2})\s*\.\s*(\d{4})/i);
+    if (m) return { m: +m[2], y: m[3].length === 2 ? 2000 + +m[3] : +m[3] };
+    m = o.match(/FECHA\s*PAGO\s*(\d{4})\s*\.\s*(\d{2})\s*\.\s*(\d{2})/i);
+    if (m) return { m: +m[2], y: +m[1] };
+    return null;
+  }
+
+  /* Tránsito: la fecha de la descripción cae en otro mes que la fecha de la fila. */
+  function esTransito(fecha, obs) {
+    var f = (fecha || "").match(/^\d{2}\/(\d{2})\/(\d{4})$/), d = fechaDesc(obs || "");
+    return !!(f && d && (+f[1] !== d.m || +f[2] !== d.y));
   }
 
   function fields(obs) {
@@ -573,7 +591,7 @@ https://github.com/nodeca/pako/blob/main/LICENSE
           ref: t.ref.join("").replace(/\s/g, ""),
           desc: f.desc,
           comercio: f.comercio,
-          concepto: f.concepto,
+          concepto: esTransito(fecha, f.obs) ? "Tránsito" : f.concepto,
           debito: t.oper === "DB" ? imp : null,
           credito: t.oper === "DB" ? null : imp,
           saldoBanco: num(t.saldo.join("")),
@@ -686,7 +704,8 @@ https://github.com/nodeca/pako/blob/main/LICENSE
       "• El “Saldo calculado” es una fórmula: saldo anterior − débito + crédito. El “Saldo según banco” es el que imprime el PDF.",
       "• La columna Diferencia debe ser 0 en todas las filas (comprobación de la extracción).",
       "• El saldo inicial (en azul) es el único importe fijo; proviene de la primera línea del estado de cuenta.",
-      "• La columna K (oculta) guarda el Concepto de cada fila (Pago recibido, Comisión, Transferencia automática, Bonificación, Nómina). La hoja Resumen abre una fila por cada par comercio × concepto."
+      "• La columna K (oculta) guarda el Concepto de cada fila (Pago recibido, Tránsito, Comisión, Transferencia automática, Bonificación, Nómina). La hoja Resumen abre una fila por cada par comercio × concepto.",
+      "• Tránsito: operación cuya fecha en la descripción (FECHA / FECHA CONTABLE / FECHA PAGO) cae en un mes distinto al de la fila."
     ];
     notes.forEach(function (txt, i) {
       var cell = ws.getRow(tot + 2 + i).getCell(3);
