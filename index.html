@@ -923,6 +923,16 @@ https://github.com/nodeca/pako/blob/main/LICENSE
       porConcepto[con].n++; porConcepto[con].cr += r.credito || 0; porConcepto[con].db += r.debito || 0;
     });
 
+    /* Cada comercio lleva todos los conceptos, aunque no tengan movimientos (salen a cero). */
+    order.map(function (k) { return agg[k].com; })
+      .filter(function (com, i, arr) { return arr.indexOf(com) === i; })
+      .forEach(function (com) {
+        CONCEPTO_ORDEN.forEach(function (con) {
+          var k = com + " » " + con;
+          if (!agg[k]) { agg[k] = { com: com, con: con, n: 0, cr: 0, db: 0 }; order.push(k); }
+        });
+      });
+
     /* Comercios alfabeticos, "(sin comercio)" al final; dentro, conceptos en orden fijo. */
     var keys = order.sort(function (ka, kb) {
       var x = agg[ka], y = agg[kb];
@@ -1026,9 +1036,10 @@ https://github.com/nodeca/pako/blob/main/LICENSE
     ws2.mergeCells(n, 1, n, 2);
 
     var concFilas = [];
-    CONCEPTO_ORDEN.filter(function (c) { return porConcepto[c]; }).forEach(function (con) {
+    /* Todos los conceptos, aunque no tengan movimientos (salen a cero). */
+    CONCEPTO_ORDEN.forEach(function (con) {
       n++;
-      var g = porConcepto[con], row = ws2.getRow(n);
+      var g = porConcepto[con] || { n: 0, cr: 0, db: 0 }, row = ws2.getRow(n);
       row.getCell(1).value = con;
       row.getCell(3).value = { formula: "COUNTIF(" + K + "," + q(con) + ")", result: g.n };
       row.getCell(4).value = { formula: "SUMIF(" + K + "," + q(con) + "," + CR + ")", result: Math.round(g.cr * 100) / 100 };
