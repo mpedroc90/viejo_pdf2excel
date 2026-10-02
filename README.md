@@ -39,3 +39,11 @@ js/
 
 Dependencias en un solo sentido: `config/util → domain → pdf · excel · storage → ui → main`.
 Solo `ui/` y `main.js` tocan el DOM; solo `storage/` toca `localStorage`.
+
+## Despliegue
+
+GitHub Pages se publica con `.github/workflows/pages.yml`:
+
+- Push / merge a `main` → publica `main` (siempre tiene prioridad).
+- Etiqueta `deploy` en un PR → publica la rama del PR en vez de `main`; cada commit nuevo al PR se vuelve a publicar.
+- Etiqueta `remove-flag-deploy` (o quitar `deploy`, o cerrar el PR sin merge) → vuelve a publicar `main` y limpia las etiquetas.

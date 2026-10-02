@@ -1,0 +1,138 @@
+name: Pages
+
+# main is the default deploy. A PR labeled `deploy` replaces the live site with
+# its head; labeling `remove-flag-deploy` (or removing `deploy`, or closing the
+# PR unmerged) restores main. A push to main always redeploys main.
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    types: [labeled, unlabeled, synchronize, closed]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+  pull-requests: write
+  actions: read
+
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  resolve:
+    runs-on: ubuntu-latest
+    outputs:
+      deploy: ${{ steps.pick.outputs.deploy }}
+      ref: ${{ steps.pick.outputs.ref }}
+      mode: ${{ steps.pick.outputs.mode }}
+    steps:
+      - id: pick
+        env:
+          GH_TOKEN: ${{ github.token }}
+          EVENT: ${{ github.event_name }}
+          ACTION: ${{ github.event.action }}
+          LABEL: ${{ github.event.label.name }}
+          HAS_DEPLOY: ${{ contains(github.event.pull_request.labels.*.name, 'deploy') }}
+          MERGED: ${{ github.event.pull_request.merged }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+        run: |
+          mode=skip
+          if [ "$EVENT" != "pull_request" ]; then
+            mode=main
+          else
+            case "$ACTION" in
+              labeled)
+                [ "$LABEL" = "deploy" ] && mode=preview
+                [ "$LABEL" = "remove-flag-deploy" ] && mode=restore
+                ;;
+              unlabeled)
+                [ "$LABEL" = "deploy" ] && mode=restore
+                ;;
+              synchronize)
+                [ "$HAS_DEPLOY" = "true" ] && mode=preview
+                ;;
+              closed)
+                [ "$MERGED" != "true" ] && [ "$HAS_DEPLOY" = "true" ] && mode=restore
+                ;;
+            esac
+          fi
+
+          # main has priority: never deploy a preview over a pending main deploy.
+          if [ "$mode" = "preview" ]; then
+            for status in queued pending waiting in_progress; do
+              n=$(gh run list -R "$GITHUB_REPOSITORY" --workflow pages.yml --branch main \
+                    --event push --status "$status" --json databaseId --jq length)
+              if [ "$n" -gt 0 ]; then
+                echo "::notice::main deploy $status, skipping preview"
+                mode=skip
+                break
+              fi
+            done
+          fi
+
+          case "$mode" in
+            preview) ref="$HEAD_SHA" ;;
+            main|restore) ref=main ;;
+            *) ref= ;;
+          esac
+          [ "$mode" = "skip" ] && deploy=false || deploy=true
+          echo "mode=$mode ref=$ref"
+          {
+            echo "mode=$mode"
+            echo "ref=$ref"
+            echo "deploy=$deploy"
+          } >> "$GITHUB_OUTPUT"
+
+  deploy:
+    needs: resolve
+    if: needs.resolve.outputs.deploy == 'true'
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.resolve.outputs.ref }}
+
+      - name: Stage site
+        run: |
+          mkdir _site
+          cp -R index.html css js vendor .nojekyll _site/
+
+      - uses: actions/configure-pages@v5
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: _site
+      - id: deployment
+        uses: actions/deploy-pages@v4
+
+      - name: Report on PR
+        if: github.event_name == 'pull_request'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PR: ${{ github.event.pull_request.number }}
+          MODE: ${{ needs.resolve.outputs.mode }}
+          REF: ${{ needs.resolve.outputs.ref }}
+          URL: ${{ steps.deployment.outputs.page_url }}
+        run: |
+          if [ "$MODE" = "preview" ]; then
+            body="🚀 PR #$PR (\`${REF:0:7}\`) is live at $URL"
+          else
+            body="↩️ main restored at $URL"
+          fi
+          gh pr comment "$PR" -R "$GITHUB_REPOSITORY" --body "$body"
+
+      - name: Clear deploy labels
+        if: github.event_name == 'pull_request' && github.event.action == 'labeled' && github.event.label.name == 'remove-flag-deploy'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PR: ${{ github.event.pull_request.number }}
+        run: |
+          for label in deploy remove-flag-deploy; do
+            gh pr edit "$PR" -R "$GITHUB_REPOSITORY" --remove-label "$label" || true
+          done
