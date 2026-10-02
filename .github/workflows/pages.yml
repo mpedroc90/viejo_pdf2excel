@@ -134,5 +134,6 @@ jobs:
           PR: ${{ github.event.pull_request.number }}
         run: |
           for label in deploy remove-flag-deploy; do
-            gh pr edit "$PR" -R "$GITHUB_REPOSITORY" --remove-label "$label" || true
+            # gh pr edit trips on the deprecated Projects (classic) GraphQL field
+            gh api -X DELETE "repos/$GITHUB_REPOSITORY/issues/$PR/labels/$label" || true
           done
