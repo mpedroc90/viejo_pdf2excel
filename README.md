@@ -25,6 +25,7 @@ js/
     classify.js         concepto, comercio, descripción y tránsito de cada operación
     statement.js        filas, saldos calculados, totales, comprobación
     sample.js           datos de ejemplo
+    summary.js          agregados por concepto y comercio
   pdf/parser.js         lectura del PDF con pdf.js (columnas por coordenadas)
   storage/aliases.js    alias de comercios en localStorage
   excel/

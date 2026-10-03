@@ -14,11 +14,15 @@ export const COMERCIOS = {
 export function etiquetaComercio(k) { return k + " - " + COMERCIOS[k]; }
 
 /* Conceptos: el Resumen abre una fila por cada par comercio × concepto.
-   El orden importa, se devuelve la primera coincidencia. */
+   El orden importa, se devuelve la primera coincidencia. "oper" (opcional) limita el
+   concepto a ese sentido: DB = débito, CR = crédito. Si el sentido no cuadra, la regla se salta. */
 export var CONCEPTOS = [
   { re: /TRANSFERENCIA\s*AUTOMATICA|TRANSF\.?\s*AUTOMATICA/i, cat: "Transferencia automática" },
-  { re: /COMISION/i, cat: "Comisión" },
-  { re: /BONIFICACION/i, cat: "Bonificación" },
+  /* DB: COBRO POR COMISION A COMERCIO (BPA) | Cobro de Comision por Transferencia | COMISION POR ACREDITACION DE NOMINA.
+     En CR, "COMI:" / "Comisiones:" es solo dato dentro de pagos, por eso va limitado a DB. */
+  { re: /COMISION/i, cat: "Comisión", oper: "DB" },
+  /* BONIFICACION A COMERCIO (BPA y BANMET) | BONIF A COMERCIO (BANDEC). No casa "Importe a bonificar", que va dentro de pagos normales. */
+  { re: /BONIFICACION|BONIF\s+A\s+COMERCIO/i, cat: "Bonificación", oper: "CR" },
   { re: /NOMINA/i, cat: "Nómina" },
   { re: /PAGO\s+DE\s+SERVICIO|DET\s*PAGO/i, cat: "Pago recibido" }
 ];

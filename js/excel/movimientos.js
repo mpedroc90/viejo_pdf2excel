@@ -81,7 +81,7 @@ export function addMovimientos(wb, data) {
     "• La columna Diferencia debe ser 0 en todas las filas (comprobación de la extracción).",
     "• El saldo inicial (en azul) es el único importe fijo; proviene de la primera línea del estado de cuenta.",
     "• La columna K (oculta) guarda el Concepto de cada fila (Pago recibido, Comisión, Transferencia automática, Bonificación, Nómina, Otro). La hoja Resumen muestra, por comercio, todos los conceptos, el grupo Tránsito con su subtotal y el subtotal del comercio.",
-    "• Tránsito: operación cuya fecha en la descripción (FECHA / FECHA CONTABLE / FECHA PAGO) cae en un mes distinto al de la fila; conserva su concepto con el prefijo “Tránsito · ”."
+    "• Tránsito: operación cuya fecha en la descripción (FECHA, FECHA CONTABLE, FECHA PAGO, PERIODO A LIQUIDAR, Mes.año, TM, VENCTO, REF UNICA…) cae en un mes distinto al de la fila; conserva su concepto con el prefijo “Tránsito · ”."
   ];
   notes.forEach(function (txt, i) {
     var cell = ws.getRow(tot + 2 + i).getCell(3);

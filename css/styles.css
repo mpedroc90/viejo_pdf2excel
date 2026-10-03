@@ -165,8 +165,35 @@ input[type=file] { position: absolute; inset: 0; opacity: 0; cursor: pointer; }
 .check.bad { background: var(--warn-soft); color: var(--warn); }
 .check .mark { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-weight: 600; }
 
+.btn.big { font-size: 16px; padding: 14px 28px; }
 .actions { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; }
 .actions .hint { font-size: 12.5px; color: var(--ink-3); }
+
+.charts { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 16px; }
+.chart { margin: 0; background: var(--panel); border: 1px solid var(--rule); border-radius: 10px; padding: 14px 16px; min-width: 0; }
+.chart.wide { grid-column: 1 / -1; }
+.chart figcaption { font-size: 11px; letter-spacing: .1em; text-transform: uppercase; color: var(--ink-3); font-weight: 600; margin-bottom: 10px; display: flex; justify-content: space-between; gap: 10px; flex-wrap: wrap; }
+.legend { text-transform: none; letter-spacing: 0; font-weight: 400; }
+.legend i { display: inline-block; width: 9px; height: 9px; border-radius: 2px; margin: 0 4px 0 8px; }
+.legend i.cr, .bar.cr { background: var(--credit); }
+.legend i.db, .bar.db { background: var(--debit); }
+.line { width: 100%; height: 160px; display: block; color: var(--accent); }
+.line-axis { display: flex; justify-content: space-between; font-size: 12px; color: var(--ink-3); font-family: ui-monospace, Menlo, Consolas, monospace; }
+.bars { display: flex; flex-direction: column; gap: 10px; }
+.bar-label { font-size: 13px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.bar-pair { display: grid; grid-template-columns: 1fr auto; align-items: center; column-gap: 8px; row-gap: 2px; }
+.bar { height: 8px; border-radius: 4px; min-width: 2px; }
+.bar-pair span { font-size: 11.5px; color: var(--ink-2); font-family: ui-monospace, Menlo, Consolas, monospace; font-variant-numeric: tabular-nums; text-align: right; }
+
+.summary { display: grid; grid-template-columns: repeat(auto-fit, minmax(380px, 1fr)); gap: 20px; }
+.summary h3 { margin: 0 0 8px; font-size: 14px; font-weight: 600; }
+.summary > div { min-width: 0; overflow-x: auto; }
+table.sum { width: 100%; border-collapse: collapse; font-size: 13px; }
+table.sum th, table.sum td { padding: 6px 8px; border-bottom: 1px solid var(--rule); text-align: right; font-variant-numeric: tabular-nums; }
+table.sum th:first-child, table.sum td:first-child { text-align: left; }
+table.sum th { font-size: 11px; letter-spacing: .08em; text-transform: uppercase; color: var(--ink-3); }
+table.sum td.cr { color: var(--credit); } table.sum td.db { color: var(--debit); }
+table.sum tfoot td { font-weight: 600; border-top: 2px solid var(--rule-strong); border-bottom: 0; }
 
 details.how { border-top: 1px solid var(--rule); padding-top: 18px; }
 details.how summary { cursor: pointer; font-weight: 600; font-size: 14px; }

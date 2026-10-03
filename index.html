@@ -29,6 +29,12 @@
     <p>Formato esperado: “Estado de Cuenta” de Banca Remota (columnas Fec.Contable · Ref.Origin · Observaciones · Oper · Importe · Saldo).</p>
   </div>
 
+  <div class="actions">
+    <button class="btn big" id="dl" disabled>Descargar Excel</button>
+    <button class="btn ghost" id="reset" hidden>Cargar otro PDF</button>
+    <span class="hint" id="dlhint"></span>
+  </div>
+
   <div id="status" class="status" hidden><span class="spinner"></span><span id="status-text">Leyendo…</span></div>
   <div id="error" class="error" hidden></div>
 
@@ -41,10 +47,15 @@
 
     <div class="check" id="check"></div>
 
-    <div class="actions">
-      <button class="btn" id="dl" disabled>Descargar Excel</button>
-      <button class="btn ghost" id="reset" hidden>Cargar otro PDF</button>
-      <span class="hint" id="dlhint"></span>
+    <div class="charts">
+      <figure class="chart wide"><figcaption>Evolución del saldo</figcaption><div id="chart-saldo"></div></figure>
+      <figure class="chart"><figcaption>Por concepto <span class="legend"><i class="cr"></i>Crédito <i class="db"></i>Débito</span></figcaption><div id="chart-conceptos"></div></figure>
+      <figure class="chart"><figcaption>Por comercio <span class="legend"><i class="cr"></i>Crédito <i class="db"></i>Débito</span></figcaption><div id="chart-comercios"></div></figure>
+    </div>
+
+    <div class="summary">
+      <div><h3>Resumen por concepto</h3><div id="tbl-conceptos"></div></div>
+      <div><h3>Resumen por comercio</h3><div id="tbl-comercios"></div></div>
     </div>
   </section>
 

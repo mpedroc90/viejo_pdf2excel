@@ -1,7 +1,21 @@
 /* Pinta el estado de cuenta en la página: metadatos, tiles, y comprobación. */
 import { fmt } from "../util.js";
+import { resumen } from "../domain/summary.js";
+import { barras, lineaSaldo } from "./charts.js";
 
 var $ = function (id) { return document.getElementById(id); };
+
+function esc(t) { return String(t).replace(/[&<>"]/g, function (c) { return { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]; }); }
+
+function tabla(items, tot, titulo) {
+  return '<table class="sum"><thead><tr><th>' + titulo + '</th><th>Op.</th><th>Crédito</th><th>Débito</th><th>Neto</th></tr></thead><tbody>' +
+    items.map(function (g) {
+      return "<tr><td>" + esc(g.k) + "</td><td>" + g.n + '</td><td class="cr">' + fmt(g.cr) + '</td><td class="db">' + fmt(g.db) +
+        "</td><td>" + fmt(g.neto) + "</td></tr>";
+    }).join("") +
+    '</tbody><tfoot><tr><td>Total</td><td>' + tot.n + "</td><td>" + fmt(tot.cr) + "</td><td>" + fmt(tot.db) + "</td><td>" + fmt(tot.cr - tot.db) +
+    "</td></tr></tfoot></table>";
+}
 
 export function render(data, isSample) {
   $("sample-note").hidden = !isSample;
@@ -32,6 +46,14 @@ export function render(data, isSample) {
     chk.innerHTML = '<span class="mark">!</span><span>' + data.mismatches +
       " fila(s) no cuadran con el saldo impreso en el PDF. Revísalas en la columna <i>Diferencia</i> del Excel antes de usarlo.</span>";
   }
+
+  var res = resumen(data);
+  var tot = { n: data.rows.length, cr: data.totalCredito, db: data.totalDebito };
+  $("chart-saldo").innerHTML = lineaSaldo(data.opening, data.rows);
+  $("chart-conceptos").innerHTML = barras(res.conceptos);
+  $("chart-comercios").innerHTML = barras(res.comercios);
+  $("tbl-conceptos").innerHTML = tabla(res.conceptos, tot, "Concepto");
+  $("tbl-comercios").innerHTML = tabla(res.comercios, tot, "Comercio");
 
   $("dl").disabled = false;
   $("dlhint").textContent = isSample ? "Este botón exporta el ejemplo; carga tu PDF para exportar tus datos." : "";

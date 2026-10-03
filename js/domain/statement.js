@@ -25,7 +25,7 @@ export function buildStatement(txs, meta) {
 
   txs.forEach(function (t) {
     if (t.fecha) fecha = t.fecha;
-    var f = fields(t.obs.join(""));
+    var f = fields(t.obs.join(""), t.oper === "DB" ? "DB" : "CR");
     var imp = num(t.imp.join("")) || 0;
     rows.push({
       fecha: fecha,
