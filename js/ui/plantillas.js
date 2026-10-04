@@ -2,7 +2,7 @@
 import { fmt, sinTildes } from "../util.js";
 import { FECHA_FORMATOS } from "../domain/classify.js";
 import { CONCEPTO_ORDEN } from "../config.js";
-import { leeRevision, marcaRevision, limpiaRevision } from "../storage/revision.js";
+import { leeRevision, marcaRevision } from "../storage/revision.js";
 import { leeConceptos, marcaConcepto } from "../storage/conceptos.js";
 
 var $ = function (id) { return document.getElementById(id); };
@@ -173,7 +173,6 @@ function pinta() {
     return '<button class="chip" data-f="' + f[0] + '" aria-pressed="' + (state.filtro === f[0]) + '">' + f[1] + "</button>";
   }).join("");
   var vis = state.ps.filter(visible).length;
-  $("tpl-clear").disabled = !hechas;
   $("tpl-prog").textContent = "Revisadas " + hechas + " de " + state.ps.length + (malas ? " · " + malas + " por corregir" : "") +
     " · mostrando " + vis;
   var lista = state.ps.map(function (p, i) { return visible(p) ? tarjeta(p, i) : ""; }).join("");
@@ -191,12 +190,6 @@ function eventos() {
   $("tpl-chips").addEventListener("click", function (e) {
     var b = e.target.closest("[data-f]");
     if (b) { state.filtro = b.dataset.f; pinta(); }
-  });
-  $("tpl-clear").addEventListener("click", function () {
-    var n = Object.keys(state.rev).length;
-    if (!n || !confirm("Quitar las " + n + " marcas de revisión? Los conceptos elegidos se conservan pero dejan de aplicarse.")) return;
-    state.rev = limpiaRevision();
-    cambio();
   });
   $("tpl-con").addEventListener("change", function (e) { state.concepto = e.target.value; pinta(); });
   $("tpl-avi").addEventListener("change", function (e) { state.aviso = e.target.value; pinta(); });

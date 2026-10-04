@@ -14,8 +14,3 @@ export function marcaRevision(plantilla, estado) {
   try { localStorage.setItem(LS, JSON.stringify(r)); } catch (e) {}
   return r;
 }
-
-export function limpiaRevision() {
-  try { localStorage.removeItem(LS); } catch (e) {}
-  return {};
-}
