@@ -93,6 +93,13 @@ function conceptosDe(p) {
 /* Un selector por sentido que tenga filas. Elegir el concepto de las reglas quita la elección. */
 function selectores(p) {
   var est = state.rev[p.plantilla], e = state.over[p.plantilla] || {};
+  /* Aceptada: el concepto queda fijo, como etiqueta. Para cambiarlo, quitar la marca. */
+  if (est === "ok") {
+    var ss = SENTIDOS.filter(function (s) { return p.auto[s[0]]; });
+    return '<div class="elige">' + ss.map(function (s) {
+      return "<b>" + (ss.length > 1 ? s[1] + ": " : "") + esc(efectivo(p, s[0])) + "</b>";
+    }).join(" · ") + "</div>";
+  }
   return '<div class="elige">' + SENTIDOS.filter(function (s) { return p.auto[s[0]]; }).map(function (s) {
     var o = s[0], act = e[o] || p.auto[o], lista = CONCEPTO_ORDEN.indexOf(act) < 0 ? CONCEPTO_ORDEN.concat(act) : CONCEPTO_ORDEN;
     return '<label>' + s[1] + ' <select data-o="' + o + '">' + lista.map(function (k) {
@@ -111,8 +118,9 @@ function tarjeta(p, idx) {
     '<span class="tp"><code>' + plantillaHtml(p) + "</code></span>" +
     '<span class="bd">' + selectores(p) + " · " + p.n + " op. (" + (p.n * 100 / state.total).toFixed(1) + "%)</span>" +
     (avisos ? '<span class="avisos">' + avisos + "</span>" : "") +
-    '<span class="rapido"><button class="btn ' + (est === "ok" ? "" : "ghost") + '" data-r="ok">✓ Aceptar</button>' +
-    '<button class="btn ' + (est === "mal" ? "" : "ghost") + '" data-r="mal">! Corregir</button>' +
+    '<span class="rapido">' +
+    (est !== "ok" ? '<button class="btn" data-r="ok">✓ Aceptar</button>' : "") +
+    (est !== "mal" ? '<button class="btn ghost" data-r="mal">! Corregir</button>' : "") +
     (est ? '<button class="btn ghost" data-r="">Quitar marca</button>' : "") + "</span></summary>" +
     '<div class="cuerpo">' +
     '<div class="tot">Crédito <b class="cr">' + fmt(p.cr) + '</b> · Débito <b class="db">' + fmt(p.db) + "</b>" +
