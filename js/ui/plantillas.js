@@ -93,7 +93,7 @@ function conceptosDe(p) {
 /* Un selector por sentido que tenga filas. Elegir el concepto de las reglas quita la elección. */
 function selectores(p) {
   var est = state.rev[p.plantilla], e = state.over[p.plantilla] || {};
-  return '<div class="elige"><h4>Concepto</h4>' + SENTIDOS.filter(function (s) { return p.auto[s[0]]; }).map(function (s) {
+  return '<div class="elige">' + SENTIDOS.filter(function (s) { return p.auto[s[0]]; }).map(function (s) {
     var o = s[0], act = e[o] || p.auto[o], lista = CONCEPTO_ORDEN.indexOf(act) < 0 ? CONCEPTO_ORDEN.concat(act) : CONCEPTO_ORDEN;
     return '<label>' + s[1] + ' <select data-o="' + o + '">' + lista.map(function (k) {
       return '<option value="' + esc(k) + '"' + (k === act ? " selected" : "") + ">" + esc(k) + (k === p.auto[o] ? " (reglas)" : "") + "</option>";
@@ -110,11 +110,13 @@ function tarjeta(p, idx) {
     '<summary><span class="est" aria-hidden="true">' + (est === "ok" ? "✓" : est === "mal" ? "!" : "") + "</span>" +
     '<span class="tp"><code>' + plantillaHtml(p) + "</code></span>" +
     '<span class="bd"><b>' + esc(conceptosDe(p).join(" / ")) + "</b> · " + p.n + " op. (" + (p.n * 100 / state.total).toFixed(1) + "%)</span>" +
-    (avisos ? '<span class="avisos">' + avisos + "</span>" : "") + "</summary>" +
+    (avisos ? '<span class="avisos">' + avisos + "</span>" : "") +
+    '<span class="rapido">' + selectores(p) +
+    '<button class="btn ' + (est === "ok" ? "" : "ghost") + '" data-r="ok">✓ Aceptar</button>' +
+    '<button class="btn ' + (est === "mal" ? "" : "ghost") + '" data-r="mal">! Corregir</button></span></summary>' +
     '<div class="cuerpo">' +
     '<div class="tot">Crédito <b class="cr">' + fmt(p.cr) + '</b> · Débito <b class="db">' + fmt(p.db) + "</b>" +
     (fe ? " · Formato de fecha: <code>" + esc(fe) + "</code>" : "") + "</div>" +
-    selectores(p) +
     "<h4>Ejemplos (" + p.ejemplos.length + " de " + p.n + ")</h4><ol class=\"ejs\">" + p.ejemplos.map(ejemplo).join("") + "</ol>" +
     '<div class="rev"><button class="btn ' + (est === "ok" ? "" : "ghost") + '" data-r="ok">✓ Correcta</button>' +
     '<button class="btn ' + (est === "mal" ? "" : "ghost") + '" data-r="mal">! Corregir</button>' +
@@ -205,6 +207,7 @@ function eventos() {
   lista.addEventListener("click", function (e) {
     var b = e.target.closest("[data-r]");
     if (!b) return;
+    e.preventDefault(); /* el botón del resumen no debe abrir/cerrar la tarjeta */
     var p = state.ps[+b.closest("details").dataset.i];
     state.abiertas[p.plantilla] = false;
     state.rev = marcaRevision(p.plantilla, b.dataset.r);
