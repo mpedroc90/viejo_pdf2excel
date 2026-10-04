@@ -2,15 +2,25 @@
 import { COMERCIOS, CONCEPTOS, etiquetaComercio } from "../config.js";
 import { sinTildes } from "../util.js";
 
-/* oper: "DB" | "CR" | undefined (sin sentido conocido: no se filtra). */
-export function concepto(o, oper) {
-  var t = sinTildes(o);
+/* Quita tildes carácter a carácter para conservar los índices del texto original. */
+function sinTildesPos(t) { return t.replace(/[\u00C0-\u017F]/g, function (c) { return c.normalize("NFD")[0]; }); }
+
+/* Regla que decide el concepto y dónde casa en el texto: {cat, index, len} o null.
+   oper: "DB" | "CR" | undefined (sin sentido conocido: no se filtra). */
+export function conceptoMatch(o, oper) {
+  var t = sinTildesPos(o);
   for (var i = 0; i < CONCEPTOS.length; i++) {
     var c = CONCEPTOS[i];
     if (c.oper && oper && c.oper !== oper) continue;
-    if (c.re.test(t)) return c.cat;
+    var m = t.match(c.re);
+    if (m) return { cat: c.cat, index: m.index, len: m[0].length };
   }
-  return "Otro";
+  return null;
+}
+
+export function concepto(o, oper) {
+  var m = conceptoMatch(o, oper);
+  return m ? m.cat : "Otro";
 }
 
 /* Fecha que trae la descripción. Cada entrada: [nombre, regex, (match) => {d, m, y}].
@@ -46,6 +56,20 @@ var PATRONES = [
     function (m) { return { d: +m[3], m: +m[2], y: 2000 + +m[1] }; }]
 ];
 
+/* Formato legible de cada patrón de fecha (para mostrar en la UI). */
+export var FECHA_FORMATOS = {
+  FECHA: "FECHA: dd.mm.aa | dd.mm.aaaa",
+  FECHA_CONTABLE: "FECHA CONTABLE: dd.mm.aaaa",
+  FECHA_PAGO_YMD: "FECHA PAGO aaaa.mm.dd",
+  PERIODO_LIQUIDAR: "PERIODO A LIQUIDAR: dd.mm.aaaa",
+  FECHA_PAGO_DMY: "Fecha Pago: dd.mm.aaaa",
+  MES_ANO: "Mes.año: mm.aaaa (sin día)",
+  ENZONA_DIA: "del día ddmmaa",
+  TM: "TM aaaa + mes y día sin ceros",
+  VENCTO: "VENCTO dd.mm.aa",
+  REF_UNICA_RU: "REF UNICA RU aammdd…"
+};
+
 /* "826" -> 8/26, "94" -> 9/4, "1015" -> 10/15. Con 3 dígitos puede ser ambiguo
    ("111" = 1/11 u 11/1): se devuelve la primera y las demás en "ambiguous". */
 function tmFecha(y, md) {
@@ -66,7 +90,7 @@ export function fechaDesc(o) {
     var m = o.match(PATRONES[i][1]);
     if (!m) continue;
     var r = PATRONES[i][2](m);
-    if (r && r.m >= 1 && r.m <= 12) { r.src = PATRONES[i][0]; return r; }
+    if (r && r.m >= 1 && r.m <= 12) { r.src = PATRONES[i][0]; r.index = m.index; r.len = m[0].length; return r; }
   }
   return null;
 }
@@ -75,6 +99,19 @@ export function fechaDesc(o) {
 export function esTransito(fecha, obs) {
   var f = (fecha || "").match(/^\d{2}\/(\d{2})\/(\d{4})$/), d = fechaDesc(obs || "");
   return !!(f && d && (+f[1] !== d.m || +f[2] !== d.y));
+}
+
+/* De dónde sale el comercio en el texto: {index, len, src} o null. Misma lógica que fields():
+   un código conocido (config.js) gana sobre el campo "COMERCIO: ... .DATOS BENEFI". */
+export function comercioMatch(obs) {
+  var o = obs.replace(/\s+/g, " ").trim(), r = null;
+  var com = o.match(/COMERCIO:\s*(.*?)\s*\.DATOS BENEFI/);
+  if (com && com[1]) r = { index: com.index + com[0].indexOf(com[1]), len: com[1].length, src: "COMERCIO:" };
+  Object.keys(COMERCIOS).forEach(function (k) {
+    var m = o.match(new RegExp(k, "i"));
+    if (m) r = { index: m.index, len: m[0].length, src: "código " + k };
+  });
+  return r;
 }
 
 export function fields(obs, oper) {

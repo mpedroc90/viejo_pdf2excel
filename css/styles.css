@@ -228,3 +228,17 @@ dialog.alias p { margin: 0 0 14px; color: var(--ink-2); font-size: 13.5px; }
 
 img { max-width: 100%; }
 [hidden] { display: none !important; }
+
+.tabs { display: flex; gap: 4px; border-bottom: 1px solid var(--rule); margin-bottom: 16px; }
+.tab { font: inherit; font-size: 14px; font-weight: 600; padding: 8px 14px; background: none; color: var(--ink-2); border: 0; border-bottom: 2px solid transparent; cursor: pointer; }
+.tab[aria-selected="true"] { color: var(--accent); border-bottom-color: var(--accent); }
+.tpl-note { color: var(--ink-2); font-size: 13px; margin: 0 0 10px; }
+#panel-plantillas { overflow-x: auto; }
+table.tpl td:first-child code { font-size: 12.5px; word-break: break-word; }
+table.tpl .ej { color: var(--ink-3); font-size: 11.5px; margin-top: 2px; font-weight: 400; word-break: break-word; }
+table.tpl td.cpt { text-align: left; white-space: nowrap; font-size: 12.5px; }
+mark { border-radius: 3px; padding: 0 2px; }
+mark.m-con { background: var(--accent-soft); color: var(--accent); }
+mark.m-fec { background: var(--warn-soft); color: var(--warn); }
+mark.m-com { background: var(--credit-soft); color: var(--credit); }
+mark.m-con.m-fec, mark.m-con.m-com, mark.m-fec.m-com { box-shadow: inset 0 -2px currentColor; }

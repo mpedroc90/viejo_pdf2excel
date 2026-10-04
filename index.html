@@ -41,6 +41,12 @@
   <section class="result" id="result">
     <div class="sample-note" id="sample-note">Vista de ejemplo — carga tu PDF para ver tus datos</div>
 
+    <div class="tabs" role="tablist">
+      <button class="tab" role="tab" id="tab-resumen" aria-controls="panel-resumen" aria-selected="true">Resumen</button>
+      <button class="tab" role="tab" id="tab-plantillas" aria-controls="panel-plantillas" aria-selected="false">Plantillas</button>
+    </div>
+
+    <div id="panel-resumen" role="tabpanel" aria-labelledby="tab-resumen">
     <div class="meta" id="meta"></div>
 
     <div class="tiles" id="tiles"></div>
@@ -56,6 +62,14 @@
     <div class="summary">
       <div><h3>Resumen por concepto</h3><div id="tbl-conceptos"></div></div>
       <div><h3>Resumen por comercio</h3><div id="tbl-comercios"></div></div>
+    </div>
+    </div>
+
+    <div id="panel-plantillas" role="tabpanel" aria-labelledby="tab-plantillas" hidden>
+      <p class="tpl-note" id="tpl-note"></p>
+      <p class="tpl-note" id="tpl-fechas"></p>
+      <p class="tpl-note"><mark class="m-con">concepto</mark> texto que decide el concepto · <mark class="m-fec">fecha</mark> texto de donde se toma la fecha · <mark class="m-com">comercio</mark> texto de donde se extrae el comercio (según el primer ejemplo de cada plantilla)</p>
+      <div id="tbl-plantillas"></div>
     </div>
   </section>
 
