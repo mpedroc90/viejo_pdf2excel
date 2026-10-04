@@ -1,6 +1,7 @@
 /* Pinta el estado de cuenta en la página: metadatos, tiles, y comprobación. */
 import { fmt } from "../util.js";
 import { resumen } from "../domain/summary.js";
+import { renderPlantillas } from "./plantillas.js";
 import { barras, lineaSaldo } from "./charts.js";
 
 var $ = function (id) { return document.getElementById(id); };
@@ -15,6 +16,13 @@ function tabla(items, tot, titulo) {
     }).join("") +
     '</tbody><tfoot><tr><td>Total</td><td>' + tot.n + "</td><td>" + fmt(tot.cr) + "</td><td>" + fmt(tot.db) + "</td><td>" + fmt(tot.cr - tot.db) +
     "</td></tr></tfoot></table>";
+}
+
+export function showTab(name) {
+  ["resumen", "plantillas"].forEach(function (t) {
+    $("panel-" + t).hidden = t !== name;
+    $("tab-" + t).setAttribute("aria-selected", String(t === name));
+  });
 }
 
 export function render(data, isSample) {
@@ -54,6 +62,8 @@ export function render(data, isSample) {
   $("chart-comercios").innerHTML = barras(res.comercios);
   $("tbl-conceptos").innerHTML = tabla(res.conceptos, tot, "Concepto");
   $("tbl-comercios").innerHTML = tabla(res.comercios, tot, "Comercio");
+
+  renderPlantillas(data);
 
   $("dl").disabled = false;
   $("dlhint").textContent = isSample ? "Este botón exporta el ejemplo; carga tu PDF para exportar tus datos." : "";

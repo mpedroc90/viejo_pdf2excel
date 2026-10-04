@@ -3,7 +3,7 @@ import { pdfReady, openPdf, parseDoc } from "./pdf/parser.js";
 import { excelReady, buildWorkbook, fileName } from "./excel/workbook.js";
 import { aplicaAlias, sinAlias } from "./storage/aliases.js";
 import { sampleData } from "./domain/sample.js";
-import { render, setStatus, setError } from "./ui/render.js";
+import { render, showTab, setStatus, setError } from "./ui/render.js";
 import { pideAlias } from "./ui/aliasDialog.js";
 
 var $ = function (id) { return document.getElementById(id); };
@@ -84,6 +84,8 @@ drop.addEventListener("drop", function (e) {
 });
 $("file").addEventListener("change", function (e) { handleFile(e.target.files[0]); });
 $("dl").addEventListener("click", download);
+$("tab-resumen").addEventListener("click", function () { showTab("resumen"); });
+$("tab-plantillas").addEventListener("click", function () { showTab("plantillas"); });
 $("reset").addEventListener("click", function () {
   $("file").value = "";
   setError("");
