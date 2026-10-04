@@ -1,5 +1,5 @@
 /* Pestaña Plantillas: una tarjeta por plantilla para revisarla a ojo. */
-import { fmt } from "../util.js";
+import { fmt, sinTildes } from "../util.js";
 import { FECHA_FORMATOS } from "../domain/classify.js";
 import { plantillas } from "../domain/drain.js";
 import { leeRevision, marcaRevision } from "../storage/revision.js";
@@ -18,7 +18,7 @@ var AVISOS = {
 var FILTROS = [
   ["todas", "Todas"], ["pendientes", "Pendientes"], ["avisos", "Con avisos"], ["mal", "Marcadas para corregir"], ["ok", "Correctas"]
 ];
-var state = { ps: [], total: 1, rev: {}, filtro: "pendientes", abiertas: {} };
+var state = { ps: [], total: 1, rev: {}, filtro: "pendientes", q: "", concepto: "", aviso: "", abiertas: {} };
 
 /* Texto con los tramos extraídos resaltados. */
 function resalta(texto, spans) {
@@ -91,8 +91,19 @@ function tarjeta(p, idx) {
     (est ? '<button class="btn ghost" data-r="">Quitar marca</button>' : "") + "</div></div></details>";
 }
 
+/* Texto donde busca: plantilla, concepto y los ejemplos con lo que se extrajo de ellos. */
+function pajar(p) {
+  if (p.pajar) return p.pajar;
+  return p.pajar = sinTildes([p.plantilla, p.concepto].concat(p.ejemplos.map(function (e) {
+    return [e.texto, e.concepto, e.fecha, e.comercio].join(" ");
+  })).join(" ")).toLowerCase();
+}
+
 function visible(p) {
   var est = state.rev[p.plantilla] || "";
+  if (state.q && state.q.split(/\s+/).some(function (w) { return pajar(p).indexOf(w) < 0; })) return false;
+  if (state.concepto && p.concepto !== state.concepto) return false;
+  if (state.aviso && (state.aviso === "ninguno" ? p.avisos.length : p.avisos.indexOf(state.aviso) < 0)) return false;
   switch (state.filtro) {
     case "pendientes": return !est;
     case "avisos": return p.avisos.length > 0;
@@ -102,20 +113,49 @@ function visible(p) {
   }
 }
 
+/* Opciones de concepto y aviso con cuántas plantillas hay de cada uno. */
+function llenaSelects() {
+  var cons = {}, avis = {}, sinAviso = 0;
+  state.ps.forEach(function (p) {
+    cons[p.concepto] = (cons[p.concepto] || 0) + 1;
+    if (!p.avisos.length) sinAviso++;
+    p.avisos.forEach(function (a) { avis[a] = (avis[a] || 0) + 1; });
+  });
+  if (!cons[state.concepto]) state.concepto = "";
+  if (state.aviso !== "ninguno" && !avis[state.aviso]) state.aviso = "";
+  var opt = function (v, t, sel) { return '<option value="' + esc(v) + '"' + (sel ? " selected" : "") + ">" + esc(t) + "</option>"; };
+  $("tpl-con").innerHTML = opt("", "Todos los conceptos", !state.concepto) + Object.keys(cons).sort().map(function (k) {
+    return opt(k, k + " (" + cons[k] + ")", state.concepto === k);
+  }).join("");
+  $("tpl-avi").innerHTML = opt("", "Todos los avisos", !state.aviso) + opt("ninguno", "Sin avisos (" + sinAviso + ")", state.aviso === "ninguno") +
+    Object.keys(AVISOS).filter(function (a) { return avis[a]; }).map(function (a) {
+      return opt(a, AVISOS[a] + " (" + avis[a] + ")", state.aviso === a);
+    }).join("");
+}
+
 function pinta() {
   var hechas = state.ps.filter(function (p) { return state.rev[p.plantilla]; }).length;
   var malas = state.ps.filter(function (p) { return state.rev[p.plantilla] === "mal"; }).length;
-  $("tpl-bar").innerHTML = '<div class="chips" role="group" aria-label="Filtrar plantillas">' + FILTROS.map(function (f) {
+  $("tpl-chips").innerHTML = FILTROS.map(function (f) {
     return '<button class="chip" data-f="' + f[0] + '" aria-pressed="' + (state.filtro === f[0]) + '">' + f[1] + "</button>";
-  }).join("") + '</div><span class="prog">Revisadas ' + hechas + " de " + state.ps.length + (malas ? " · " + malas + " por corregir" : "") + "</span>";
+  }).join("");
+  var vis = state.ps.filter(visible).length;
+  $("tpl-prog").textContent = "Revisadas " + hechas + " de " + state.ps.length + (malas ? " · " + malas + " por corregir" : "") +
+    " · mostrando " + vis;
   var lista = state.ps.map(function (p, i) { return visible(p) ? tarjeta(p, i) : ""; }).join("");
-  $("tbl-plantillas").innerHTML = lista || '<p class="vacio">No hay plantillas con este filtro.</p>';
+  $("tbl-plantillas").innerHTML = lista || '<p class="vacio">No hay plantillas con este filtro o búsqueda.</p>';
 }
 
 function eventos() {
-  $("tpl-bar").addEventListener("click", function (e) {
+  $("tpl-chips").addEventListener("click", function (e) {
     var b = e.target.closest("[data-f]");
     if (b) { state.filtro = b.dataset.f; pinta(); }
+  });
+  $("tpl-con").addEventListener("change", function (e) { state.concepto = e.target.value; pinta(); });
+  $("tpl-avi").addEventListener("change", function (e) { state.aviso = e.target.value; pinta(); });
+  $("tpl-q").addEventListener("input", function (e) {
+    state.q = sinTildes(e.target.value).toLowerCase().trim();
+    pinta();
   });
   var lista = $("tbl-plantillas");
   lista.addEventListener("toggle", function (e) {
@@ -152,5 +192,6 @@ export function renderPlantillas(data) {
         return "<code>" + esc(FECHA_FORMATOS[k] || k) + "</code> (" + fmts[k] + ")";
       }).join(" · ")
     : "Ninguna descripción trae fecha.";
+  llenaSelects();
   pinta();
 }

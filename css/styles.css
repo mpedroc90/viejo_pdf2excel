@@ -278,3 +278,5 @@ mark.m-alt-fec { color: var(--warn); } mark.m-alt-con { color: var(--accent); }
 .m-alt-any { text-decoration: underline dotted 2px; text-underline-offset: 3px; }
 .alts { list-style: none; margin: 6px 0 0; padding: 6px 8px; border: 1px dashed var(--rule-strong); border-radius: 6px; font-size: 12px; display: grid; gap: 3px; }
 .alts .cd { color: var(--ink-3); } .alts .dif { color: var(--debit); font-weight: 600; }
+.tpl-q { flex: 1 1 220px; min-width: 0; font: inherit; font-size: 13px; padding: 6px 10px; border: 1px solid var(--rule-strong); border-radius: 6px; background: var(--panel); color: var(--ink); }
+.tpl-sel { font: inherit; font-size: 13px; padding: 6px 8px; border: 1px solid var(--rule-strong); border-radius: 6px; background: var(--panel); color: var(--ink); max-width: 100%; }

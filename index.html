@@ -69,7 +69,13 @@
       <p class="tpl-note" id="tpl-note"></p>
       <p class="tpl-note" id="tpl-fechas"></p>
       <p class="tpl-note"><mark class="m-con">concepto</mark> texto que decide el concepto · <mark class="m-fec">fecha</mark> texto de donde se toma la fecha · <mark class="m-com">comercio</mark> texto de donde se extrae el comercio · <span class="m-alt-any">subrayado punteado</span> otras fechas, u otros conceptos distintos, que no se usan (según el primer ejemplo de cada plantilla)</p>
-      <div class="tpl-bar" id="tpl-bar"></div>
+      <div class="tpl-bar">
+        <input type="search" id="tpl-q" class="tpl-q" placeholder="Buscar en plantillas y ejemplos…" aria-label="Buscar plantillas por texto" autocomplete="off">
+        <select id="tpl-con" class="tpl-sel" aria-label="Filtrar por concepto"></select>
+        <select id="tpl-avi" class="tpl-sel" aria-label="Filtrar por aviso"></select>
+        <div class="chips" id="tpl-chips" role="group" aria-label="Filtrar plantillas"></div>
+        <span class="prog" id="tpl-prog"></span>
+      </div>
       <div id="tbl-plantillas"></div>
     </div>
   </section>
