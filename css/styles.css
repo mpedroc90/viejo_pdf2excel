@@ -242,3 +242,39 @@ mark.m-con { background: var(--accent-soft); color: var(--accent); }
 mark.m-fec { background: var(--warn-soft); color: var(--warn); }
 mark.m-com { background: var(--credit-soft); color: var(--credit); }
 mark.m-con.m-fec, mark.m-con.m-com, mark.m-fec.m-com { box-shadow: inset 0 -2px currentColor; }
+
+.tpl-bar { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px; margin: 10px 0; }
+.chips { display: flex; flex-wrap: wrap; gap: 6px; }
+.chip { font: inherit; font-size: 12.5px; padding: 4px 10px; border-radius: 999px; border: 1px solid var(--rule-strong); background: var(--panel); color: var(--ink-2); cursor: pointer; }
+.chip[aria-pressed="true"] { background: var(--accent-soft); color: var(--accent); border-color: var(--accent); }
+.prog { font-size: 12.5px; color: var(--ink-2); }
+.vacio { color: var(--ink-3); font-size: 13px; }
+details.card { border: 1px solid var(--rule); border-radius: 8px; background: var(--panel); margin-bottom: 8px; border-left: 4px solid var(--rule-strong); }
+details.card.ok { border-left-color: var(--credit); }
+details.card.mal { border-left-color: var(--debit); }
+details.card summary { cursor: pointer; padding: 10px 12px; display: flex; flex-wrap: wrap; align-items: baseline; gap: 6px 12px; }
+details.card .est { width: 1.2em; font-weight: 700; }
+details.card.ok .est { color: var(--credit); } details.card.mal .est { color: var(--debit); }
+details.card .tp { flex: 1 1 360px; min-width: 0; } details.card .tp code { font-size: 12.5px; word-break: break-word; }
+details.card .bd { font-size: 12.5px; color: var(--ink-2); white-space: nowrap; }
+.avisos { flex-basis: 100%; display: flex; flex-wrap: wrap; gap: 6px; padding-left: 1.7em; }
+.aviso { font-size: 11.5px; background: var(--warn-soft); color: var(--warn); border-radius: 4px; padding: 1px 6px; }
+.cuerpo { padding: 0 12px 12px; border-top: 1px solid var(--rule); }
+.cuerpo h4 { margin: 12px 0 6px; font-size: 12px; letter-spacing: .08em; text-transform: uppercase; color: var(--ink-3); }
+.cuerpo .tot { font-size: 13px; color: var(--ink-2); margin-top: 10px; }
+.ejs { margin: 0; padding-left: 20px; display: grid; gap: 10px; }
+.ejs .txt { font-family: ui-monospace, Menlo, monospace; font-size: 12px; line-height: 1.7; word-break: break-word; }
+.ejs .res { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 8px; margin-top: 4px; }
+.campo { background: var(--panel-2); border-radius: 6px; padding: 6px 8px; font-size: 12.5px; }
+.campo .cn { font-size: 11px; margin-bottom: 2px; } .campo .cv { font-weight: 600; } .campo .cd { color: var(--ink-3); font-size: 11.5px; word-break: break-word; }
+.campo .nada { color: var(--debit); font-weight: 400; }
+.rev { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 12px; }
+details.card[open] { border-color: var(--accent); border-left-width: 4px; box-shadow: 0 0 0 1px var(--accent), var(--shadow); }
+details.card[open].ok { border-left-color: var(--credit); } details.card[open].mal { border-left-color: var(--debit); }
+details.card[open] > summary { background: var(--accent-soft); border-radius: 7px 7px 0 0; }
+details.card[open] > summary::before { content: "▶ revisando"; flex-basis: 100%; font-size: 11px; letter-spacing: .08em; text-transform: uppercase; color: var(--accent); }
+mark.m-alt-fec, mark.m-alt-con { background: transparent; text-decoration: underline dotted 2px; text-underline-offset: 3px; }
+mark.m-alt-fec { color: var(--warn); } mark.m-alt-con { color: var(--accent); }
+.m-alt-any { text-decoration: underline dotted 2px; text-underline-offset: 3px; }
+.alts { list-style: none; margin: 6px 0 0; padding: 6px 8px; border: 1px dashed var(--rule-strong); border-radius: 6px; font-size: 12px; display: grid; gap: 3px; }
+.alts .cd { color: var(--ink-3); } .alts .dif { color: var(--debit); font-weight: 600; }

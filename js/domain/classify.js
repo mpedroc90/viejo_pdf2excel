@@ -67,7 +67,8 @@ export var FECHA_FORMATOS = {
   ENZONA_DIA: "del día ddmmaa",
   TM: "TM aaaa + mes y día sin ceros",
   VENCTO: "VENCTO dd.mm.aa",
-  REF_UNICA_RU: "REF UNICA RU aammdd…"
+  REF_UNICA_RU: "REF UNICA RU aammdd…",
+  SIN_PATRON: "fecha sin regla (no se usa)"
 };
 
 /* "826" -> 8/26, "94" -> 9/4, "1015" -> 10/15. Con 3 dígitos puede ser ambiguo
@@ -93,6 +94,46 @@ export function fechaDesc(o) {
     if (r && r.m >= 1 && r.m <= 12) { r.src = PATRONES[i][0]; r.index = m.index; r.len = m[0].length; return r; }
   }
   return null;
+}
+
+var pad2 = function (n) { return n < 10 ? "0" + n : "" + n; };
+export function fmtFecha(r) { return (r.d ? pad2(r.d) + "/" : "") + pad2(r.m) + "/" + r.y; }
+
+function todos(re, t) {
+  return Array.from(t.matchAll(new RegExp(re.source, re.flags.replace("g", "") + "g")));
+}
+var solapa = function (a, b) { return a.index < b.index + b.len && b.index < a.index + a.len; };
+
+/* Todas las fechas que se ven en el texto, usadas o no. Cada una: {src, index, len, valor, usada}.
+   "usada" = la que elige fechaDesc. Las que no encajan en ninguna regla salen como SIN_PATRON. */
+export function fechasCandidatas(o) {
+  var c = [], pri = fechaDesc(o);
+  PATRONES.forEach(function (p) {
+    todos(p[1], o).forEach(function (m) {
+      if (!m[0]) return;
+      var r = p[2](m), ok = r && r.m >= 1 && r.m <= 12;
+      c.push({ src: p[0], index: m.index, len: m[0].length, valor: ok ? fmtFecha(r) : "",
+        usada: !!(pri && pri.src === p[0] && pri.index === m.index) });
+    });
+  });
+  todos(/(?<!\d)(\d{1,2}[./-]\d{1,2}[./-]\d{2,4}|\d{4}[./-]\d{1,2}[./-]\d{1,2})(?!\d)/, o).forEach(function (m) {
+    var x = { src: "SIN_PATRON", index: m.index, len: m[0].length, valor: "", usada: false };
+    if (!c.some(function (y) { return solapa(x, y); })) c.push(x);
+  });
+  return c;
+}
+
+/* Todas las reglas de concepto que casan en el texto. "descartada": la regla no aplica a ese sentido. */
+export function conceptosCandidatos(o, oper) {
+  var t = sinTildesPos(o), pri = conceptoMatch(o, oper), c = [];
+  CONCEPTOS.forEach(function (r) {
+    todos(r.re, t).forEach(function (m) {
+      if (!m[0]) return;
+      c.push({ cat: r.cat, index: m.index, len: m[0].length,
+        descartada: !!(r.oper && oper && r.oper !== oper), usada: !!(pri && pri.cat === r.cat && pri.index === m.index) });
+    });
+  });
+  return c;
 }
 
 /* Tránsito: la fecha de la descripción cae en otro mes que la fecha de la fila. */
