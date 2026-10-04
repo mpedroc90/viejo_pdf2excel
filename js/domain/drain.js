@@ -137,11 +137,14 @@ export function plantillas(rows, opts) {
   var d = drain(opts);
   rows.forEach(function (r, i) { d.add(tokeniza(r.obs || r.desc), i); });
   return d.clusters().map(function (c) {
-    var cr = 0, db = 0, porConcepto = {};
+    var cr = 0, db = 0, porConcepto = {}, porOper = { DB: {}, CR: {} };
+    var top = function (m) { return Object.keys(m).sort(function (a, b) { return m[a] - m[b]; }).pop(); };
     c.ids.forEach(function (i) {
       cr += rows[i].credito || 0; db += rows[i].debito || 0;
-      var k = (rows[i].concepto || "Otro").replace(TRANSITO, "");
+      /* Siempre el concepto por reglas, aunque ya se haya aplicado uno elegido. */
+      var k = (rows[i].conceptoAuto || rows[i].concepto || "Otro").replace(TRANSITO, ""), o = rows[i].debito != null ? "DB" : "CR";
       porConcepto[k] = (porConcepto[k] || 0) + 1;
+      porOper[o][k] = (porOper[o][k] || 0) + 1;
     });
     /* Concepto de la plantilla = el más frecuente de sus filas, sin el prefijo de Tránsito. */
     var conceptos = Object.keys(porConcepto).sort(function (a, b) { return porConcepto[b] - porConcepto[a]; });
@@ -150,7 +153,10 @@ export function plantillas(rows, opts) {
     ex0.spans.forEach(function (sp) { tokensEn(toks, sp.s, sp.e - sp.s).forEach(function (i) { marcas[i].push(sp.c); }); });
     return {
       plantilla: c.tpl.join(" "), tokens: c.tpl, marcas: marcas, n: c.ids.length, cr: cr, db: db,
-      concepto: conceptos[0], fechaSrc: ex0.fechaSrc, comercioSrc: ex0.comercioSrc,
+      concepto: conceptos[0], ids: c.ids,
+      /* Concepto por reglas en cada sentido ("" si la plantilla no tiene filas de ese sentido). */
+      auto: { DB: top(porOper.DB) || "", CR: top(porOper.CR) || "" },
+      fechaSrc: ex0.fechaSrc, comercioSrc: ex0.comercioSrc,
       ejemplo: texto,
       ejemplos: todosEx.slice(0, 5),
       avisos: avisos(todosEx, conceptos.length > 1)

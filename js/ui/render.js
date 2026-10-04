@@ -1,6 +1,10 @@
 /* Pinta el estado de cuenta en la página: metadatos, tiles, y comprobación. */
 import { fmt } from "../util.js";
 import { resumen } from "../domain/summary.js";
+import { plantillas } from "../domain/drain.js";
+import { aplicaConceptos } from "../domain/conceptos.js";
+import { leeRevision } from "../storage/revision.js";
+import { leeConceptos } from "../storage/conceptos.js";
 import { renderPlantillas } from "./plantillas.js";
 import { barras, lineaSaldo } from "./charts.js";
 
@@ -55,6 +59,18 @@ export function render(data, isSample) {
       " fila(s) no cuadran con el saldo impreso en el PDF. Revísalas en la columna <i>Diferencia</i> del Excel antes de usarlo.</span>";
   }
 
+  var ps = plantillas(data.rows);
+  var aplica = function () { aplicaConceptos(data.rows, ps, leeRevision(), leeConceptos()); };
+  aplica();
+  pintaResumen(data);
+  /* Si en Plantillas se cambia un concepto o una revisión, el resumen se recalcula. */
+  renderPlantillas(data, ps, function () { aplica(); pintaResumen(data); });
+
+  $("dl").disabled = false;
+  $("dlhint").textContent = isSample ? "Este botón exporta el ejemplo; carga tu PDF para exportar tus datos." : "";
+}
+
+function pintaResumen(data) {
   var res = resumen(data);
   var tot = { n: data.rows.length, cr: data.totalCredito, db: data.totalDebito };
   $("chart-saldo").innerHTML = lineaSaldo(data.opening, data.rows);
@@ -62,11 +78,6 @@ export function render(data, isSample) {
   $("chart-comercios").innerHTML = barras(res.comercios);
   $("tbl-conceptos").innerHTML = tabla(res.conceptos, tot, "Concepto");
   $("tbl-comercios").innerHTML = tabla(res.comercios, tot, "Comercio");
-
-  renderPlantillas(data);
-
-  $("dl").disabled = false;
-  $("dlhint").textContent = isSample ? "Este botón exporta el ejemplo; carga tu PDF para exportar tus datos." : "";
 }
 
 export function setStatus(msg) {
