@@ -2,17 +2,15 @@
 import { pdfReady, openPdf, parseDoc } from "./pdf/parser.js";
 import { excelReady, buildWorkbook, fileName } from "./excel/workbook.js";
 import { aplicaAlias, sinAlias } from "./storage/aliases.js";
-import { sampleData } from "./domain/sample.js";
-import { render, showTab, setStatus, setError } from "./ui/render.js";
+import { render, renderInicio, showTab, setStatus, setError } from "./ui/render.js";
 import { pideAlias } from "./ui/aliasDialog.js";
 
 var $ = function (id) { return document.getElementById(id); };
-var state = { data: null, sample: true };
+var state = { data: null };
 
-function show(data, isSample) {
+function show(data) {
   state.data = data;
-  state.sample = !!isSample;
-  render(data, isSample);
+  render(data);
 }
 
 function libsReady() {
@@ -38,7 +36,7 @@ function handleFile(file) {
     setStatus("");
     var pend = sinAlias(data);
     return (pend.length ? pideAlias(pend) : Promise.resolve()).then(function () {
-      show(aplicaAlias(data), false);
+      show(aplicaAlias(data));
     });
   }).catch(function (e) {
     setStatus("");
@@ -62,7 +60,7 @@ function download() {
   var prev = $("dl").textContent;
   $("dl").textContent = "Generando…";
   buildWorkbook(data).xlsx.writeBuffer().then(function (buf) {
-    var name = state.sample ? "Estado_de_Cuenta_EJEMPLO.xlsx" : fileName(data.meta);
+    var name = fileName(data.meta);
     saveBlob(new Blob([buf], { type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" }), name);
   }).catch(function (e) {
     setError("No se pudo generar el Excel: " + (e && e.message ? e.message : e));
@@ -89,8 +87,9 @@ $("tab-plantillas").addEventListener("click", function () { showTab("plantillas"
 $("reset").addEventListener("click", function () {
   $("file").value = "";
   setError("");
-  show(sampleData(), true);
+  state.data = null;
+  renderInicio();
   window.scrollTo({ top: 0, behavior: "smooth" });
 });
 
-show(sampleData(), true);
+renderInicio();

@@ -5,6 +5,8 @@ import { plantillas } from "../domain/drain.js";
 import { aplicaConceptos } from "../domain/conceptos.js";
 import { leeRevision } from "../storage/revision.js";
 import { leeConceptos } from "../storage/conceptos.js";
+import { leeEjemplos, guardaEjemplos } from "../storage/ejemplos.js";
+import { heredaPlantillas } from "../storage/herencia.js";
 import { renderPlantillas } from "./plantillas.js";
 import { barras, lineaSaldo } from "./charts.js";
 
@@ -29,9 +31,33 @@ export function showTab(name) {
   });
 }
 
-export function render(data, isSample) {
-  $("sample-note").hidden = !isSample;
-  $("reset").hidden = !!isSample;
+/* Plantillas con marca o concepto guardados, sin PDF: solo se conoce su patrón. */
+function plantillasGuardadas() {
+  var rev = leeRevision(), con = leeConceptos(), ejs = leeEjemplos(), vistas = {};
+  return Object.keys(rev).concat(Object.keys(con)).filter(function (k) {
+    return !vistas[k] && (vistas[k] = true);
+  }).map(function (k) {
+    var tokens = k.split(" "), c = con[k] || {}, g = ejs[k] || {};
+    return { plantilla: k, tokens: tokens, marcas: g.marcas || tokens.map(function () { return []; }), n: 0, cr: 0, db: 0,
+      concepto: c.DB || c.CR || "", ids: [], auto: { DB: c.DB || "", CR: c.CR || "" },
+      fechaSrc: g.fechaSrc || "", comercioSrc: g.comercioSrc || "", ejemplo: "", ejemplos: g.ejemplos || [], avisos: [], guardada: true };
+  });
+}
+
+/* Arranque sin PDF: resumen vacío y la pestaña Plantillas con las guardadas. */
+export function renderInicio() {
+  $("sample-note").hidden = false;
+  $("reset").hidden = true;
+  ["meta", "tiles", "check", "chart-saldo", "chart-conceptos", "chart-comercios", "tbl-conceptos", "tbl-comercios"].forEach(function (id) { $(id).innerHTML = ""; });
+  $("check").className = "check";
+  $("dl").disabled = true;
+  $("dlhint").textContent = "Carga tu PDF para exportar.";
+  renderPlantillas({ rows: [] }, plantillasGuardadas(), function () {});
+}
+
+export function render(data) {
+  $("sample-note").hidden = true;
+  $("reset").hidden = false;
 
   $("meta").innerHTML =
     (data.meta.cuenta ? "<div>Cuenta <b><span>" + data.meta.cuenta + "</span></b></div>" : "") +
@@ -60,6 +86,8 @@ export function render(data, isSample) {
   }
 
   var ps = plantillas(data.rows);
+  heredaPlantillas(ps);
+  guardaEjemplos(ps);
   var aplica = function () { aplicaConceptos(data.rows, ps, leeRevision(), leeConceptos()); };
   aplica();
   pintaResumen(data);
@@ -67,7 +95,7 @@ export function render(data, isSample) {
   renderPlantillas(data, ps, function () { aplica(); pintaResumen(data); });
 
   $("dl").disabled = false;
-  $("dlhint").textContent = isSample ? "Este botón exporta el ejemplo; carga tu PDF para exportar tus datos." : "";
+  $("dlhint").textContent = "";
 }
 
 function pintaResumen(data) {

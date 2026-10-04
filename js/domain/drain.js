@@ -55,15 +55,90 @@ export function drain(opts) {
     return c;
   }
 
-  return { add: add, clusters: function () { return clusters; } };
+  /* Segunda pasada: Drain no vuelve a juntar grupos ya creados, y el orden de las filas decide qué
+     se generaliza antes. Primero se comprimen los "<*>" seguidos de cada plantilla (multi[i] = ese
+     "<*>" cubre uno o más tokens). Después se funden los grupos:
+     a) de igual longitud, parecidos (sim) y sin contradicción: donde los dos tienen texto, es el mismo;
+     b) cuando el patrón de uno cubre al otro (sus "<*>" absorben el texto del otro), si ese patrón
+        tiene al menos la mitad de tokens fijos. */
+  function fusiona(list) {
+    var cs = list.map(function (c) {
+      var tpl = [], multi = [];
+      c.tpl.forEach(function (t) {
+        if (t === WILD && tpl.length && tpl[tpl.length - 1] === WILD) multi[multi.length - 1] = true;
+        else { tpl.push(t); multi.push(false); }
+      });
+      return { tpl: tpl, multi: multi, ids: c.ids.slice() };
+    });
+    var contradice = function (a, b) {
+      return a.some(function (t, i) { return t !== WILD && b[i] !== WILD && t !== b[i]; });
+    };
+    var absorbe = function (a, b, tpl, multi) {
+      a.tpl = tpl; a.multi = multi;
+      a.ids = a.ids.concat(b.ids).sort(function (x, y) { return x - y; });
+    };
+    for (;;) {
+      var best = null, bs = -1, i, j;
+      for (i = 0; i < cs.length; i++) {
+        for (j = i + 1; j < cs.length; j++) {
+          if (cs[i].tpl.length !== cs[j].tpl.length || contradice(cs[i].tpl, cs[j].tpl)) continue;
+          var sm = similitud(cs[i].tpl, cs[j].tpl);
+          if (sm >= sim && sm > bs) { best = [i, j]; bs = sm; }
+        }
+      }
+      if (best) {
+        var x = cs[best[0]], y = cs[best[1]];
+        absorbe(x, y, x.tpl.map(function (t, k) { return t === y.tpl[k] ? t : WILD; }),
+          x.multi.map(function (m, k) { return m || y.multi[k]; }));
+        cs.splice(best[1], 1);
+        continue;
+      }
+      for (i = 0; i < cs.length && !best; i++) {
+        for (j = 0; j < cs.length && !best; j++) {
+          if (i !== j && cubre(cs[i], cs[j].tpl)) best = [i, j];
+        }
+      }
+      if (!best) return cs;
+      absorbe(cs[best[0]], cs[best[1]], cs[best[0]].tpl, cs[best[0]].multi);
+      cs.splice(best[1], 1);
+    }
+  }
+
+  return { add: add, clusters: function () { return fusiona(clusters); } };
 }
 
 /* Enmascara lo variable (fechas, tarjetas, referencias, importes) y parte en tokens.
    Cada token lleva su tramo [s, e) en el texto original, para poder resaltarlo. */
 export function tokensPos(texto) {
-  var t = String(texto || ""), re = /(\d[\dXx.\/,-]*)|([:=])|(\s+)|([^\s:=\d]+)/g, m, ps = [];
-  while ((m = re.exec(t))) {
-    var s = m.index, e = s + m[0].length;
+  var t = String(texto || ""), ps = [];
+  /* El nombre del comercio (COMERCIO: ... .DATOS BENEFI) es un solo campo variable, tenga las palabras que tenga. */
+  var nm = t.match(/(?<=COMERCIO:)\s*.*?(?=\s*\.DATOS BENEFI)/), a = -1, b = -1;
+  if (nm && nm[0].trim()) { a = nm.index + nm[0].length - nm[0].trimStart().length; b = nm.index + nm[0].trimEnd().length; }
+  if (a < 0) escanea(t, 0, t.length, ps);
+  else {
+    escanea(t, 0, a, ps);
+    ps.push({ ws: true }, { t: WILD, s: a, e: b, wild: true }, { ws: true });
+    escanea(t, b, t.length, ps);
+  }
+  var toks = [], cur = null;
+  ps.forEach(function (p) {
+    if (p.ws) { cur = null; return; }
+    if (cur) { cur.t += p.t; cur.e = p.e; } else { cur = { t: p.t, s: p.s, e: p.e }; toks.push(cur); }
+  });
+  /* Varios "<*>" seguidos son uno solo: así un nombre de 2 palabras y otro de 3 dan la misma plantilla. */
+  var out = [];
+  toks.forEach(function (k) {
+    var prev = out[out.length - 1];
+    if (prev && prev.t === WILD && k.t === WILD) prev.e = k.e; else out.push(k);
+  });
+  return out;
+}
+
+/* Parte [desde, hasta) del texto en trozos para tokensPos; los tramos quedan en coordenadas del texto completo. */
+function escanea(t, desde, hasta, ps) {
+  var re = /(\d[\dXx.\/,-]*)|([:=])|(\s+)|([^\s:=\d]+)/g, m, seg = t.slice(desde, hasta);
+  while ((m = re.exec(seg))) {
+    var s = desde + m.index, e = s + m[0].length;
     if (m[1]) {
       var n = ps.length;
       while (n > 0 && ps[n - 1].ws) n--;
@@ -73,12 +148,6 @@ export function tokensPos(texto) {
     else if (m[3]) ps.push({ ws: true });
     else ps.push({ t: m[0], s: s, e: e });
   }
-  var toks = [], cur = null;
-  ps.forEach(function (p) {
-    if (p.ws) { cur = null; return; }
-    if (cur) { cur.t += p.t; cur.e = p.e; } else { cur = { t: p.t, s: p.s, e: p.e }; toks.push(cur); }
-  });
-  return toks;
 }
 
 export function tokeniza(texto) { return tokensPos(texto).map(function (k) { return k.t; }); }
@@ -150,9 +219,16 @@ export function plantillas(rows, opts) {
     var conceptos = Object.keys(porConcepto).sort(function (a, b) { return porConcepto[b] - porConcepto[a]; });
     var todosEx = c.ids.map(function (i) { return extrae(rows[i]); }), ex0 = todosEx[0];
     var texto = ex0.texto, toks = tokensPos(texto), marcas = c.tpl.map(function () { return []; });
-    ex0.spans.forEach(function (sp) { tokensEn(toks, sp.s, sp.e - sp.s).forEach(function (i) { marcas[i].push(sp.c); }); });
+    /* Una plantilla comprimida no tiene tantos tokens como la fila: cada token de la fila va a un puesto de la plantilla. */
+    var puesto = alinea(c.tpl, c.multi, toks.map(function (k) { return k.t; }));
+    ex0.spans.forEach(function (sp) {
+      tokensEn(toks, sp.s, sp.e - sp.s).forEach(function (i) {
+        var q = puesto ? puesto[i] : i;
+        if (marcas[q] && marcas[q].indexOf(sp.c) < 0) marcas[q].push(sp.c);
+      });
+    });
     return {
-      plantilla: c.tpl.join(" "), tokens: c.tpl, marcas: marcas, n: c.ids.length, cr: cr, db: db,
+      plantilla: c.tpl.join(" "), tokens: c.tpl, multi: c.multi, marcas: marcas, n: c.ids.length, cr: cr, db: db,
       concepto: conceptos[0], ids: c.ids,
       /* Concepto por reglas en cada sentido ("" si la plantilla no tiene filas de ese sentido). */
       auto: { DB: top(porOper.DB) || "", CR: top(porOper.CR) || "" },
@@ -162,4 +238,43 @@ export function plantillas(rows, opts) {
       avisos: avisos(todosEx, conceptos.length > 1)
     };
   }).sort(function (a, b) { return b.n - a.n; });
+}
+
+/* Parecido entre dos plantillas (listas de tokens): fracción de posiciones iguales, contando
+   "<*>" con "<*>". 0 si no tienen el mismo número de tokens. */
+export function similitud(a, b) {
+  if (a.length !== b.length || !a.length) return 0;
+  var same = 0;
+  for (var i = 0; i < a.length; i++) if (a[i] === b[i]) same++;
+  return same / a.length;
+}
+
+/* Casa una lista de tokens con un patrón de plantilla: un token fijo casa solo consigo mismo, un "<*>"
+   con un token cualquiera y un "<*>" multi con uno o más. Devuelve, por token, el índice del patrón
+   al que va, o null si no casa. Prefiere que cada "<*>" tome los menos tokens posibles. */
+export function alinea(tpl, multi, toks) {
+  var n = tpl.length, m = toks.length, memo = {};
+  function ir(i, j) {
+    if (i === n) return j === m ? [] : null;
+    var key = i * (m + 1) + j;
+    if (key in memo) return memo[key];
+    var r = null;
+    if (tpl[i] !== WILD) {
+      if (j < m && toks[j] === tpl[i]) { var rest = ir(i + 1, j + 1); if (rest) r = [i].concat(rest); }
+    } else {
+      for (var k = 1; j + k <= m && !r; k++) {
+        var rest2 = ir(i + 1, j + k);
+        if (rest2) { r = []; for (var q = 0; q < k; q++) r.push(i); r = r.concat(rest2); }
+        if (!multi[i]) break;
+      }
+    }
+    return memo[key] = r;
+  }
+  return ir(0, 0);
+}
+
+/* ¿El patrón de "a" cubre a la plantilla "tpl"? Solo si "a" tiene al menos la mitad de tokens fijos. */
+function cubre(a, tpl) {
+  var fijos = a.tpl.filter(function (t) { return t !== WILD; }).length;
+  return fijos * 2 >= a.tpl.length && !!alinea(a.tpl, a.multi, tpl);
 }
