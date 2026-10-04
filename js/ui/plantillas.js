@@ -109,10 +109,9 @@ function tarjeta(p, idx) {
   return '<details class="card ' + est + '" data-i="' + idx + '"' + (state.abiertas[p.plantilla] ? " open" : "") + ">" +
     '<summary><span class="est" aria-hidden="true">' + (est === "ok" ? "✓" : est === "mal" ? "!" : "") + "</span>" +
     '<span class="tp"><code>' + plantillaHtml(p) + "</code></span>" +
-    '<span class="bd"><b>' + esc(conceptosDe(p).join(" / ")) + "</b> · " + p.n + " op. (" + (p.n * 100 / state.total).toFixed(1) + "%)</span>" +
+    '<span class="bd">' + selectores(p) + " · " + p.n + " op. (" + (p.n * 100 / state.total).toFixed(1) + "%)</span>" +
     (avisos ? '<span class="avisos">' + avisos + "</span>" : "") +
-    '<span class="rapido">' + selectores(p) +
-    '<button class="btn ' + (est === "ok" ? "" : "ghost") + '" data-r="ok">✓ Aceptar</button>' +
+    '<span class="rapido"><button class="btn ' + (est === "ok" ? "" : "ghost") + '" data-r="ok">✓ Aceptar</button>' +
     '<button class="btn ' + (est === "mal" ? "" : "ghost") + '" data-r="mal">! Corregir</button>' +
     (est ? '<button class="btn ghost" data-r="">Quitar marca</button>' : "") + "</span></summary>" +
     '<div class="cuerpo">' +
