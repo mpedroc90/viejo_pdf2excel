@@ -1,6 +1,12 @@
 /* Pinta el estado de cuenta en la página: metadatos, tiles, y comprobación. */
 import { fmt } from "../util.js";
 import { resumen } from "../domain/summary.js";
+import { plantillas } from "../domain/drain.js";
+import { aplicaConceptos } from "../domain/conceptos.js";
+import { leeRevision } from "../storage/revision.js";
+import { leeConceptos } from "../storage/conceptos.js";
+import { leeEjemplos, guardaEjemplos } from "../storage/ejemplos.js";
+import { heredaPlantillas } from "../storage/herencia.js";
 import { renderPlantillas } from "./plantillas.js";
 import { barras, lineaSaldo } from "./charts.js";
 
@@ -25,9 +31,33 @@ export function showTab(name) {
   });
 }
 
-export function render(data, isSample) {
-  $("sample-note").hidden = !isSample;
-  $("reset").hidden = !!isSample;
+/* Plantillas con marca o concepto guardados, sin PDF: solo se conoce su patrón. */
+function plantillasGuardadas() {
+  var rev = leeRevision(), con = leeConceptos(), ejs = leeEjemplos(), vistas = {};
+  return Object.keys(rev).concat(Object.keys(con)).filter(function (k) {
+    return !vistas[k] && (vistas[k] = true);
+  }).map(function (k) {
+    var tokens = k.split(" "), c = con[k] || {}, g = ejs[k] || {};
+    return { plantilla: k, tokens: tokens, marcas: g.marcas || tokens.map(function () { return []; }), n: 0, cr: 0, db: 0,
+      concepto: c.DB || c.CR || "", ids: [], auto: { DB: c.DB || "", CR: c.CR || "" },
+      fechaSrc: g.fechaSrc || "", comercioSrc: g.comercioSrc || "", ejemplo: "", ejemplos: g.ejemplos || [], avisos: [], guardada: true };
+  });
+}
+
+/* Arranque sin PDF: resumen vacío y la pestaña Plantillas con las guardadas. */
+export function renderInicio() {
+  $("sample-note").hidden = false;
+  $("reset").hidden = true;
+  ["meta", "tiles", "check", "chart-saldo", "chart-conceptos", "chart-comercios", "tbl-conceptos", "tbl-comercios"].forEach(function (id) { $(id).innerHTML = ""; });
+  $("check").className = "check";
+  $("dl").disabled = true;
+  $("dlhint").textContent = "Carga tu PDF para exportar.";
+  renderPlantillas({ rows: [] }, plantillasGuardadas(), function () {});
+}
+
+export function render(data) {
+  $("sample-note").hidden = true;
+  $("reset").hidden = false;
 
   $("meta").innerHTML =
     (data.meta.cuenta ? "<div>Cuenta <b><span>" + data.meta.cuenta + "</span></b></div>" : "") +
@@ -55,6 +85,20 @@ export function render(data, isSample) {
       " fila(s) no cuadran con el saldo impreso en el PDF. Revísalas en la columna <i>Diferencia</i> del Excel antes de usarlo.</span>";
   }
 
+  var ps = plantillas(data.rows);
+  heredaPlantillas(ps);
+  guardaEjemplos(ps);
+  var aplica = function () { aplicaConceptos(data.rows, ps, leeRevision(), leeConceptos()); };
+  aplica();
+  pintaResumen(data);
+  /* Si en Plantillas se cambia un concepto o una revisión, el resumen se recalcula. */
+  renderPlantillas(data, ps, function () { aplica(); pintaResumen(data); });
+
+  $("dl").disabled = false;
+  $("dlhint").textContent = "";
+}
+
+function pintaResumen(data) {
   var res = resumen(data);
   var tot = { n: data.rows.length, cr: data.totalCredito, db: data.totalDebito };
   $("chart-saldo").innerHTML = lineaSaldo(data.opening, data.rows);
@@ -62,11 +106,6 @@ export function render(data, isSample) {
   $("chart-comercios").innerHTML = barras(res.comercios);
   $("tbl-conceptos").innerHTML = tabla(res.conceptos, tot, "Concepto");
   $("tbl-comercios").innerHTML = tabla(res.comercios, tot, "Comercio");
-
-  renderPlantillas(data);
-
-  $("dl").disabled = false;
-  $("dlhint").textContent = isSample ? "Este botón exporta el ejemplo; carga tu PDF para exportar tus datos." : "";
 }
 
 export function setStatus(msg) {

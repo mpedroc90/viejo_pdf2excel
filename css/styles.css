@@ -256,7 +256,7 @@ details.card summary { cursor: pointer; padding: 10px 12px; display: flex; flex-
 details.card .est { width: 1.2em; font-weight: 700; }
 details.card.ok .est { color: var(--credit); } details.card.mal .est { color: var(--debit); }
 details.card .tp { flex: 1 1 360px; min-width: 0; } details.card .tp code { font-size: 12.5px; word-break: break-word; }
-details.card .bd { font-size: 12.5px; color: var(--ink-2); white-space: nowrap; }
+details.card .bd { font-size: 12.5px; color: var(--ink-2); display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 8px; justify-content: flex-end; }
 .avisos { flex-basis: 100%; display: flex; flex-wrap: wrap; gap: 6px; padding-left: 1.7em; }
 .aviso { font-size: 11.5px; background: var(--warn-soft); color: var(--warn); border-radius: 4px; padding: 1px 6px; }
 .cuerpo { padding: 0 12px 12px; border-top: 1px solid var(--rule); }
@@ -268,6 +268,9 @@ details.card .bd { font-size: 12.5px; color: var(--ink-2); white-space: nowrap; 
 .campo { background: var(--panel-2); border-radius: 6px; padding: 6px 8px; font-size: 12.5px; }
 .campo .cn { font-size: 11px; margin-bottom: 2px; } .campo .cv { font-weight: 600; } .campo .cd { color: var(--ink-3); font-size: 11.5px; word-break: break-word; }
 .campo .nada { color: var(--debit); font-weight: 400; }
+.rapido { flex-basis: 100%; display: flex; flex-wrap: wrap; align-items: baseline; gap: 6px 12px; padding-left: 1.7em; }
+.elige { display: flex; flex-wrap: wrap; align-items: baseline; gap: 6px 16px; }
+.elige label { font-size: 13px; color: var(--ink-2); } .elige select { font: inherit; margin-left: 4px; }
 .rev { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 12px; }
 details.card[open] { border-color: var(--accent); border-left-width: 4px; box-shadow: 0 0 0 1px var(--accent), var(--shadow); }
 details.card[open].ok { border-left-color: var(--credit); } details.card[open].mal { border-left-color: var(--debit); }
